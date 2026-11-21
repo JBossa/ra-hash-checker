@@ -10,6 +10,8 @@ use crate::model::{GameEntry, GameHash};
 /// URL del repositorio para el User-Agent; sustituir `<owner>` cuando exista el repo en GitHub.
 pub const REPO_URL: &str = "https://github.com/<owner>/ra-hash-checker";
 
+/// Los mensajes de `Network`/`Parse` solo se usan por `Debug`; la UI muestra un código localizado.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum RaError {
     Unauthorized,

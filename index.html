@@ -2,42 +2,40 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="stylesheet" href="/src/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <title>RA Hash Checker</title>
     <script type="module" src="/src/main.ts" defer></script>
   </head>
-
   <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
-
-      <div class="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/src/assets/vite.svg" class="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img
-            src="/src/assets/tauri.svg"
-            class="logo tauri"
-            alt="Tauri logo"
-          />
-        </a>
-        <a href="https://www.typescriptlang.org/docs" target="_blank">
-          <img
-            src="/src/assets/typescript.svg"
-            class="logo typescript"
-            alt="typescript logo"
-          />
-        </a>
+    <header>
+      <h1>RA Hash Checker</h1>
+      <button id="settings-btn" type="button" aria-label="Settings">⚙</button>
+    </header>
+    <main>
+      <div id="drop" class="drop" role="button" tabindex="0">
+        <p id="drop-text"></p>
+        <p id="no-key" class="no-key" hidden>
+          <span id="no-key-text"></span>
+          <a id="get-key" href="#"></a>
+        </p>
       </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
-
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
+      <div id="results"></div>
     </main>
+    <dialog id="settings">
+      <form method="dialog">
+        <h2 id="settings-title"></h2>
+        <label id="key-label" for="api-key"></label>
+        <input id="api-key" type="password" autocomplete="off" spellcheck="false" />
+        <p id="key-hint" class="hint"></p>
+        <div class="actions">
+          <button id="save-key" type="button"></button>
+          <button id="refresh" type="button"></button>
+        </div>
+        <p id="last-refresh" class="hint"></p>
+        <p id="settings-msg" class="hint" role="status"></p>
+        <div class="actions"><button id="close-settings" value="close"></button></div>
+      </form>
+    </dialog>
   </body>
 </html>

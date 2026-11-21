@@ -46,7 +46,8 @@ impl HashCache {
         now.saturating_sub(list.fetched_at) > MAX_AGE_SECS
     }
 
-    /// Busca por MD5 sin distinguir mayúsculas.
+    /// Busca por MD5 sin distinguir mayúsculas (solo lo usan los tests; checker.rs tiene su propia búsqueda).
+    #[allow(dead_code)]
     pub fn find<'a>(list: &'a CachedList, md5: &str) -> Option<&'a GameEntry> {
         list.games
             .iter()
