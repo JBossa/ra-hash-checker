@@ -18,11 +18,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+rcheevos-hash = { path = "../crates/rcheevos-hash" }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+zip = { version = "9.8.1", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 mockito = "1"

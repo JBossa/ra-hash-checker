@@ -4,6 +4,10 @@ mod model;
 mod cache;
 #[allow(dead_code)]
 mod ra_api;
+#[allow(dead_code)]
+mod inputs;
+#[allow(dead_code)]
+mod checker;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]

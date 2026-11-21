@@ -1,0 +1,331 @@
+//! Comprobación de un archivo contra las listas de hashes registradas en RA.
+
+use crate::inputs::Input;
+use crate::model::{CheckResult, GameEntry, GameHash, MessageCode, Status};
+use rcheevos_hash::{candidate_consoles, console_name, hash};
+use std::path::PathBuf;
+
+pub enum ListOutcome {
+    Available(Vec<GameEntry>),
+    Unavailable(MessageCode),
+}
+
+pub trait HashListSource {
+    fn list(&self, console_id: u32) -> ListOutcome;
+    fn game_hashes(&self, game_id: u32) -> Option<Vec<GameHash>>;
+}
+
+fn find_game<'a>(games: &'a [GameEntry], md5: &str) -> Option<&'a GameEntry> {
+    games
+        .iter()
+        .find(|g| g.hashes.iter().any(|h| h.eq_ignore_ascii_case(md5)))
+}
+
+fn base_result(input: &Input) -> CheckResult {
+    CheckResult {
+        file_name: input.display_name.clone(),
+        source_path: input.source_path.to_string_lossy().into_owned(),
+        inner_name: input.inner_name.clone(),
+        console_id: None,
+        console_name: None,
+        md5: None,
+        status: Status::Error,
+        game: None,
+        matched_name: None,
+        alternatives: Vec::new(),
+        message: None,
+    }
+}
+
+fn error_result(input: &Input, code: MessageCode) -> CheckResult {
+    CheckResult { message: Some(code), ..base_result(input) }
+}
+
+/// Nombre usado para detectar la extensión: el del interior del zip o la ruta.
+fn name_path(input: &Input) -> PathBuf {
+    match &input.inner_name {
+        Some(n) => PathBuf::from(n),
+        None => input.source_path.clone(),
+    }
+}
+
+fn matched_result(
+    input: &Input,
+    console_id: u32,
+    md5: &str,
+    game: &GameEntry,
+    src: &dyn HashListSource,
+) -> CheckResult {
+    let matched_name = src.game_hashes(game.id).and_then(|hs| {
+        hs.into_iter()
+            .find(|h| h.md5.eq_ignore_ascii_case(md5))
+            .map(|h| h.name)
+    });
+    CheckResult {
+        console_id: Some(console_id),
+        console_name: Some(console_name(console_id).to_string()),
+        md5: Some(md5.to_string()),
+        status: if game.num_achievements == 0 {
+            Status::RegisteredNoAchievements
+        } else {
+            Status::Registered
+        },
+        game: Some(game.clone()),
+        matched_name,
+        ..base_result(input)
+    }
+}
+
+fn unmatched_result(
+    input: &Input,
+    console_id: u32,
+    md5: &str,
+    unavailable: Option<MessageCode>,
+    alternatives: Vec<(u32, String)>,
+) -> CheckResult {
+    CheckResult {
+        console_id: Some(console_id),
+        console_name: Some(console_name(console_id).to_string()),
+        md5: Some(md5.to_string()),
+        status: if unavailable.is_some() { Status::Unchecked } else { Status::NotRegistered },
+        alternatives,
+        message: unavailable,
+        ..base_result(input)
+    }
+}
+
+pub fn check(input: &Input, src: &dyn HashListSource) -> CheckResult {
+    if input.disc_in_zip {
+        return error_result(input, MessageCode::DiscInZip);
+    }
+    let path = name_path(input);
+    let data = input.data.as_deref();
+    let candidates = candidate_consoles(&path, data);
+    if candidates.is_empty() {
+        return CheckResult { status: Status::Unsupported, ..base_result(input) };
+    }
+
+    // (consola, md5, motivo si su lista no estuvo disponible)
+    let mut hashed: Vec<(u32, String, Option<MessageCode>)> = Vec::new();
+    for c in candidates {
+        let Some(h) = hash(&path, data, c) else { continue };
+        match src.list(c) {
+            ListOutcome::Available(games) => {
+                if let Some(game) = find_game(&games, &h) {
+                    return matched_result(input, c, &h, game, src);
+                }
+                hashed.push((c, h, None));
+            }
+            ListOutcome::Unavailable(code) => hashed.push((c, h, Some(code))),
+        }
+    }
+    let Some((c0, h0, unavailable)) = hashed.first().cloned() else {
+        return error_result(input, MessageCode::NoHash);
+    };
+    let alternatives = hashed[1..]
+        .iter()
+        .map(|(c, _, _)| (*c, console_name(*c).to_string()))
+        .collect();
+    unmatched_result(input, c0, &h0, unavailable, alternatives)
+}
+
+pub fn check_as(input: &Input, console_id: u32, src: &dyn HashListSource) -> CheckResult {
+    if input.disc_in_zip {
+        return error_result(input, MessageCode::DiscInZip);
+    }
+    let path = name_path(input);
+    let Some(h) = hash(&path, input.data.as_deref(), console_id) else {
+        return error_result(input, MessageCode::NoHash);
+    };
+    match src.list(console_id) {
+        ListOutcome::Available(games) => match find_game(&games, &h) {
+            Some(game) => matched_result(input, console_id, &h, game, src),
+            None => unmatched_result(input, console_id, &h, None, Vec::new()),
+        },
+        ListOutcome::Unavailable(code) => {
+            unmatched_result(input, console_id, &h, Some(code), Vec::new())
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::path::Path;
+
+    #[derive(Default)]
+    struct FakeSource {
+        lists: HashMap<u32, Vec<GameEntry>>,
+        unavailable: Option<MessageCode>,
+        hashes: HashMap<u32, Vec<GameHash>>,
+        asked: RefCell<Vec<u32>>,
+    }
+
+    impl HashListSource for FakeSource {
+        fn list(&self, console_id: u32) -> ListOutcome {
+            self.asked.borrow_mut().push(console_id);
+            if let Some(code) = self.unavailable {
+                return ListOutcome::Unavailable(code);
+            }
+            ListOutcome::Available(self.lists.get(&console_id).cloned().unwrap_or_default())
+        }
+        fn game_hashes(&self, game_id: u32) -> Option<Vec<GameHash>> {
+            self.hashes.get(&game_id).cloned()
+        }
+    }
+
+    fn input(name: &str, data: &[u8]) -> Input {
+        Input {
+            source_path: PathBuf::from(name),
+            display_name: name.to_string(),
+            inner_name: None,
+            data: Some(data.to_vec()),
+            disc_in_zip: false,
+        }
+    }
+
+    fn game(id: u32, console: u32, ach: u32, md5: &str) -> GameEntry {
+        GameEntry {
+            id,
+            title: "Juego".into(),
+            console_id: console,
+            num_achievements: ach,
+            hashes: vec![md5.to_uppercase()],
+        }
+    }
+
+    fn md5_of(name: &str, data: &[u8], console: u32) -> String {
+        rcheevos_hash::hash(Path::new(name), Some(data), console).unwrap()
+    }
+
+    const GBA_DATA: &[u8] = b"gba rom bytes for testing";
+
+    fn gba_source(ach: u32) -> (FakeSource, String) {
+        let h = md5_of("a.gba", GBA_DATA, 5);
+        let mut s = FakeSource::default();
+        s.lists.insert(5, vec![game(42, 5, ach, &h)]);
+        (s, h)
+    }
+
+    #[test]
+    fn gba_match_is_registered() {
+        let (s, h) = gba_source(10);
+        let r = check(&input("a.gba", GBA_DATA), &s);
+        assert_eq!(r.status, Status::Registered);
+        assert_eq!(r.game.unwrap().id, 42);
+        assert_eq!(r.console_id, Some(5));
+        assert_eq!(r.md5, Some(h));
+    }
+
+    #[test]
+    fn zero_achievements() {
+        let (s, _) = gba_source(0);
+        let r = check(&input("a.gba", GBA_DATA), &s);
+        assert_eq!(r.status, Status::RegisteredNoAchievements);
+    }
+
+    #[test]
+    fn no_match_is_not_registered() {
+        let mut s = FakeSource::default();
+        s.lists.insert(5, vec![game(1, 5, 3, "ffffffffffffffffffffffffffffffff")]);
+        let r = check(&input("a.gba", GBA_DATA), &s);
+        assert_eq!(r.status, Status::NotRegistered);
+        assert!(r.md5.is_some());
+        assert!(r.game.is_none());
+    }
+
+    #[test]
+    fn no_list_is_unchecked() {
+        let s = FakeSource { unavailable: Some(MessageCode::NoApiKey), ..Default::default() };
+        let r = check(&input("a.gba", GBA_DATA), &s);
+        assert_eq!(r.status, Status::Unchecked);
+        assert_eq!(r.message, Some(MessageCode::NoApiKey));
+        assert!(r.md5.is_some());
+    }
+
+    /// Candidatas que rcheevos realmente hashea para un `.dsk` arbitrario (el `.bin` solo hashea como Mega Drive).
+    fn bin_hashed() -> (Vec<u8>, Vec<(u32, String)>) {
+        let data: Vec<u8> = (0..4096u32).map(|i| (i * 7 + 3) as u8).collect();
+        let hashed: Vec<(u32, String)> =
+            rcheevos_hash::candidate_consoles(Path::new("x.dsk"), Some(&data))
+                .into_iter()
+                .filter_map(|c| {
+                    rcheevos_hash::hash(Path::new("x.dsk"), Some(&data), c).map(|h| (c, h))
+                })
+                .collect();
+        (data, hashed)
+    }
+
+    #[test]
+    fn ambiguous_stops_at_first_match() {
+        let (data, hashed) = bin_hashed();
+        assert!(hashed.len() >= 2, "fixture needs >= 2 hashed candidates: {hashed:?}");
+        let mut s = FakeSource::default();
+        s.lists.insert(hashed[1].0, vec![game(7, hashed[1].0, 5, &hashed[1].1)]);
+        let r = check(&input("x.dsk", &data), &s);
+        assert_eq!(r.status, Status::Registered);
+        assert_eq!(r.console_id, Some(hashed[1].0));
+        assert_eq!(*s.asked.borrow(), vec![hashed[0].0, hashed[1].0]);
+    }
+
+    #[test]
+    fn ambiguous_no_match_uses_first() {
+        let (data, hashed) = bin_hashed();
+        assert!(hashed.len() >= 2);
+        let s = FakeSource::default();
+        let r = check(&input("x.dsk", &data), &s);
+        assert_eq!(r.status, Status::NotRegistered);
+        assert_eq!(r.console_id, Some(hashed[0].0));
+        assert_eq!(r.md5.as_deref(), Some(hashed[0].1.as_str()));
+        let alt_ids: Vec<u32> = r.alternatives.iter().map(|a| a.0).collect();
+        let want: Vec<u32> = hashed[1..].iter().map(|h| h.0).collect();
+        assert_eq!(alt_ids, want);
+    }
+
+    #[test]
+    fn matched_name_from_game_hashes() {
+        let (mut s, h) = gba_source(10);
+        s.hashes.insert(
+            42,
+            vec![
+                GameHash { md5: "0".repeat(32), name: "Otro".into(), labels: vec![] },
+                GameHash { md5: h.to_uppercase(), name: "Juego (USA)".into(), labels: vec![] },
+            ],
+        );
+        let r = check(&input("a.gba", GBA_DATA), &s);
+        assert_eq!(r.matched_name.as_deref(), Some("Juego (USA)"));
+    }
+
+    #[test]
+    fn unknown_extension_is_unsupported() {
+        let s = FakeSource::default();
+        let r = check(&input("notes.txt", b"hola"), &s);
+        assert_eq!(r.status, Status::Unsupported);
+        assert!(s.asked.borrow().is_empty());
+    }
+
+    #[test]
+    fn zip_with_cue_flags_disc() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("disc.zip");
+        std::fs::write(&p, crate::inputs::tests::make_zip(&[("juego.cue", b"x"), ("juego.bin", b"y")]))
+            .unwrap();
+        let inputs = crate::inputs::expand(&p).unwrap();
+        let s = FakeSource::default();
+        for i in &inputs {
+            let r = check(i, &s);
+            assert_eq!(r.status, Status::Error);
+            assert_eq!(r.message, Some(MessageCode::DiscInZip));
+        }
+    }
+
+    #[test]
+    fn check_as_hashes_only_that_console() {
+        let (s, _) = gba_source(10);
+        let r = check_as(&input("a.gba", GBA_DATA), 5, &s);
+        assert_eq!(r.status, Status::Registered);
+        assert_eq!(*s.asked.borrow(), vec![5]);
+    }
+}
+
