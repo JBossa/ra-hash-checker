@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/rcheevos-hash"]
+resolver = "2"

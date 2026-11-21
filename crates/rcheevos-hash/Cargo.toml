@@ -1,0 +1,13 @@
+[package]
+name = "rcheevos-hash"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+build = "build.rs"
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+md5 = "0.7"
+tempfile = "3"
