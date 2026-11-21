@@ -8,6 +8,8 @@ mod ra_api;
 mod inputs;
 #[allow(dead_code)]
 mod checker;
+#[allow(dead_code)]
+mod source;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
