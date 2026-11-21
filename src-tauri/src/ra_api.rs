@@ -31,11 +31,17 @@ struct HashesResponse {
     results: Vec<GameHash>,
 }
 
+/// La URL lleva la clave (`y=`): se quita antes de convertir el error en texto.
+fn network_error(e: reqwest::Error) -> RaError {
+    RaError::Network(e.without_url().to_string())
+}
+
 impl RaClient {
     pub fn new(base_url: &str, api_key: String) -> RaClient {
         let user_agent = format!("RAHashChecker/{} (+{})", env!("CARGO_PKG_VERSION"), REPO_URL);
         let http = reqwest::blocking::Client::builder()
             .user_agent(user_agent)
+            .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(60))
             .build()
             .expect("cliente HTTP");
@@ -64,7 +70,7 @@ impl RaClient {
             .query(params)
             .query(&[("y", self.api_key.as_str())])
             .send()
-            .map_err(|e| RaError::Network(e.to_string()))?;
+            .map_err(network_error)?;
         let status = resp.status();
         if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err(RaError::Unauthorized);
@@ -72,7 +78,7 @@ impl RaClient {
         if !status.is_success() {
             return Err(RaError::Network(format!("HTTP {status}")));
         }
-        let body = resp.text().map_err(|e| RaError::Network(e.to_string()))?;
+        let body = resp.text().map_err(network_error)?;
         serde_json::from_str(&body).map_err(|e| RaError::Parse(e.to_string()))
     }
 }
@@ -139,6 +145,16 @@ mod tests {
         let _m = server.mock("GET", Matcher::Any).with_status(401).create();
         let client = RaClient::new(&server.url(), "BAD".into());
         assert!(matches!(client.get_game_list(5), Err(RaError::Unauthorized)));
+    }
+
+    #[test]
+    fn network_error_does_not_contain_the_key() {
+        let client = RaClient::new("http://127.0.0.1:1", "SECRETKEY123".into());
+        for err in [client.get_game_list(5).unwrap_err(), client.get_game_hashes(9).unwrap_err()] {
+            let RaError::Network(msg) = &err else { panic!("{err:?}") };
+            assert!(!msg.is_empty());
+            assert!(!format!("{err:?}").contains("SECRETKEY123"), "{err:?}");
+        }
     }
 
     #[test]
