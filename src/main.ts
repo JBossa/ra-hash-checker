@@ -6,6 +6,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { makeTranslator } from './i18n';
 import { renderRow, type CheckResult } from './view';
+import { wireSettingsForm } from './settings';
 
 const t = makeTranslator(navigator.language || 'en');
 const KEYS_URL = 'https://retroachievements.org/controlpanel.php';
@@ -149,7 +150,7 @@ $('settings-btn').addEventListener('click', async () => {
   await loadSettings();
   dialog.showModal();
 });
-$('save-key').addEventListener('click', async () => {
+async function saveKey() {
   const input = $<HTMLInputElement>('api-key');
   try {
     await invoke('set_api_key', { key: input.value });
@@ -159,7 +160,9 @@ $('save-key').addEventListener('click', async () => {
   } catch (e) {
     $('settings-msg').textContent = msg(e);
   }
-});
+}
+wireSettingsForm(dialog.querySelector('form')!, saveKey);
+$('close-settings').addEventListener('click', () => dialog.close());
 $('refresh').addEventListener('click', async () => {
   const btn = $<HTMLButtonElement>('refresh');
   btn.disabled = true;
