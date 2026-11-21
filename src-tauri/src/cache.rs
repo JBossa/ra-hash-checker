@@ -3,6 +3,7 @@
 use crate::model::{GameEntry, GameHash};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Una lista se considera obsoleta pasados 7 días.
 const MAX_AGE_SECS: u64 = 7 * 24 * 3600;
@@ -92,14 +93,22 @@ impl HashCache {
     }
 }
 
-/// Escribe en `<ruta>.tmp` y renombra, para que un cierre a medias no corrompa la caché.
+/// `<ruta>.<pid>.<n>.tmp`: único por proceso y por escritura, para que dos escrituras simultáneas
+/// de la misma lista nunca compartan el archivo temporal.
+fn tmp_path(path: &Path) -> PathBuf {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(format!(".{}.{n}.tmp", std::process::id()));
+    PathBuf::from(tmp)
+}
+
+/// Escribe en un temporal único y renombra, para que un cierre a medias no corrompa la caché.
 fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".tmp");
-    let tmp = PathBuf::from(tmp);
+    let tmp = tmp_path(path);
     std::fs::write(&tmp, bytes)?;
     std::fs::rename(&tmp, path).inspect_err(|_| {
         let _ = std::fs::remove_file(&tmp);
@@ -166,6 +175,46 @@ mod tests {
         let g = HashCache::find(&l, "abcdef0123456789abcdef0123456789").unwrap();
         assert_eq!(g.id, 2);
         assert!(HashCache::find(&l, "ffff").is_none());
+    }
+
+    #[test]
+    fn tmp_names_are_unique_per_write() {
+        let p = Path::new("lists").join("5.json");
+        let a = tmp_path(&p);
+        let b = tmp_path(&p);
+        assert_ne!(a, b);
+        let name = a.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("5.json."), "{name}");
+        assert!(name.contains(&std::process::id().to_string()), "{name}");
+        assert!(name.ends_with(".tmp"), "{name}");
+        assert_eq!(a.parent(), p.parent());
+    }
+
+    #[test]
+    fn concurrent_saves_leave_a_valid_list() {
+        let (t, c) = cache();
+        let c = std::sync::Arc::new(c);
+        let handles: Vec<_> = (0..8u32)
+            .map(|i| {
+                let c = std::sync::Arc::clone(&c);
+                std::thread::spawn(move || {
+                    let games: Vec<GameEntry> = (0..500).map(|g| game(g * 10 + i, &["aa"])).collect();
+                    for _ in 0..5 {
+                        let _ = c.save_list(5, &games, 100 + u64::from(i));
+                    }
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+        assert_eq!(c.load_list(5).unwrap().games.len(), 500);
+        let leftovers: Vec<_> = std::fs::read_dir(t.path().join("lists"))
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
     }
 
     #[test]

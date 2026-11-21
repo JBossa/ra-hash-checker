@@ -15,9 +15,14 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::cache::HashCache;
 use crate::model::{CheckResult, MessageCode, Status};
 use crate::ra_api::{RaClient, RaError};
-use crate::source::LiveSource;
+use crate::source::{FetchLock, LiveSource};
 
 const RA_BASE_URL: &str = "https://retroachievements.org/API";
+
+/// Cerrojo de descargas compartido por todos los comandos (estado administrado de Tauri), para que
+/// dos lotes, `check_as` y `refresh_lists` nunca descarguen la misma lista a la vez.
+#[derive(Default)]
+struct SharedFetchLock(FetchLock);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,10 +50,12 @@ fn cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn new_source(app: &AppHandle) -> Result<LiveSource, String> {
     let client = source::load_api_key().map(|k| RaClient::new(RA_BASE_URL, k));
-    Ok(LiveSource::new(
+    let lock = Arc::clone(&app.state::<SharedFetchLock>().0);
+    Ok(LiveSource::with_lock(
         HashCache::new(cache_dir(app)?),
         client,
         now_secs(),
+        lock,
     ))
 }
 
@@ -142,9 +149,10 @@ fn set_api_key(key: String) -> Result<(), String> {
 async fn refresh_lists(app: AppHandle) -> Result<usize, String> {
     let key = source::load_api_key().ok_or_else(|| "noApiKey".to_string())?;
     let dir = cache_dir(&app)?;
+    let lock = Arc::clone(&app.state::<SharedFetchLock>().0);
     let joined = tauri::async_runtime::spawn_blocking(move || {
         let client = RaClient::new(RA_BASE_URL, key);
-        source::refresh_all(&HashCache::new(dir), &client, now_secs())
+        source::refresh_all(&HashCache::new(dir), &client, now_secs(), &lock)
     })
     .await
     .map_err(|_| "offline".to_string())?;
@@ -160,6 +168,7 @@ async fn refresh_lists(app: AppHandle) -> Result<usize, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(SharedFetchLock::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
