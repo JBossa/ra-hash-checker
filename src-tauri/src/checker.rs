@@ -433,6 +433,41 @@ mod tests {
     }
 
     #[test]
+    fn arcade_zip_checks_filename_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("sf2.zip");
+        std::fs::write(&p, crate::inputs::tests::make_zip(&[("sf2_30a.11e", b"a"), ("sf2.03", b"b")]))
+            .unwrap();
+        let inputs = crate::inputs::expand(&p).unwrap();
+        assert_eq!(inputs.len(), 1);
+        let h = md5_of("name.gb", b"sf2", 4); // rcheevos' arcade hash: MD5 of "sf2"
+        let mut s = FakeSource::default();
+        s.lists.insert(27, vec![game(9, 27, 30, &h)]);
+        let r = check(&inputs[0], &s);
+        assert_eq!(r.status, Status::Registered);
+        assert_eq!(r.console_id, Some(27));
+        assert_eq!(r.md5.as_deref(), Some(h.as_str()));
+        assert_eq!(r.file_name, "sf2.zip");
+        assert_eq!(check_as(&inputs[0], 27, &s).status, Status::Registered);
+    }
+
+    #[test]
+    fn zip_bin_cartridge_hashes_as_mega_drive() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("sonic.zip");
+        let rom: Vec<u8> = (0..2048u32).map(|i| (i * 3) as u8).collect();
+        std::fs::write(&p, crate::inputs::tests::make_zip(&[("Sonic.bin", &rom)])).unwrap();
+        let inputs = crate::inputs::expand(&p).unwrap();
+        let h = md5_of("x.md", &rom, 1);
+        let mut s = FakeSource::default();
+        s.lists.insert(1, vec![game(1, 1, 40, &h)]);
+        let r = check(&inputs[0], &s);
+        assert_eq!(r.status, Status::Registered);
+        assert_eq!(r.console_id, Some(1));
+        assert_eq!(r.message, None);
+    }
+
+    #[test]
     fn archives_are_unsupported_with_message() {
         for name in ["Pokemon Emerald.7z", "juego.RAR"] {
             let s = FakeSource::default();
