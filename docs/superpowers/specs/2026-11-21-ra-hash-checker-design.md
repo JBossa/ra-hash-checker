@@ -21,6 +21,7 @@ Nace de un caso real. El usuario tiene juegos de GBA, y antes un .bin de PS1, y 
 - Archivos CHD, archivos 7z y juegos de 3DS cifrados.
 - Cuentas, logros o progreso del usuario: no se muestra nada de su perfil.
 - Revisar una biblioteca completa por carpetas (quizá en el futuro).
+- **Sugerencia "¿Quizás…?" (versión futura, decidido por el usuario):** cuando el hash no coincide, buscar por el nombre del archivo el juego probable y mostrar qué versiones exactas acepta RA (`API_GetGameHashes` → `Name`).
 
 ## Anti-objetivos (la app fracasa si...)
 
@@ -54,8 +55,6 @@ Nace de un caso real. El usuario tiene juegos de GBA, y antes un .bin de PS1, y 
 │  Pokemon Emerald.gba   GBA   1f1c08…  ✅ Registrado │
 │      Pokémon Emerald Version  → ver en RA      │
 │  Mario Kart.gba        GBA   9a33e1…  ❌ No registrado │
-│      ¿Quizás "Mario Kart: Super Circuit"?      │
-│      RA acepta: Mario Kart - Super Circuit (USA) │
 │  Bloody Roar II.cue    PS1   77defa…  ✅ Registrado │
 └───────────────────────────────────────────────┘
 ```
@@ -74,7 +73,7 @@ Nace de un caso real. El usuario tiene juegos de GBA, y antes un .bin de PS1, y 
 3. **Calcular el hash:** `rc_hash_generate(hash, console_id, iterator)`.
 4. **Comparar:** se busca el MD5 en el mapa `md5 → juego` de esa consola, construido a partir de la caché.
 5. **Si coincide:** se muestra el título, el enlace `retroachievements.org/game/<id>` y, si hay conexión, el nombre del archivo registrado (por ejemplo "… (USA, Europe)") vía `API_GetGameHashes`.
-6. **Si no coincide:** se buscan en la lista de esa consola títulos parecidos al nombre del archivo (búsqueda difusa). Para el mejor candidato se muestran los nombres de los archivos que RA acepta (`API_GetGameHashes` → campo `Name`), para que el usuario sepa qué versión necesita. *(Decisión mía, pendiente de confirmar.)*
+6. **Si no coincide:** la fila muestra "❌ No registrado" y nada más. La sugerencia "¿Quizás…?" queda para una versión futura (ver No-objetivos).
 
 ### Datos de RA y caché
 
@@ -92,7 +91,7 @@ Nace de un caso real. El usuario tiene juegos de GBA, y antes un .bin de PS1, y 
 ### Arquitectura
 
 - **`rcheevos-hash` (Rust, dentro del repo):** compila con el crate `cc` desde `build.rs` los archivos de hash de rcheevos, con un tag fijo vía submódulo git, y define `RC_HASH_NO_ENCRYPTED`. Expone una función segura: `hash_file(path) -> Vec<(console_id, md5)>` y `hash_buffer(name, bytes, console_id)`.
-- **Backend de Tauri:** comandos `hash_files`, `lookup`, `refresh_console`, `get/set_api_key`. Usa `reqwest` para la API, `zip` para los `.zip` y `strsim` o similar para la búsqueda difusa.
+- **Backend de Tauri:** comandos `hash_files`, `lookup`, `refresh_console`, `get/set_api_key`. Usa `reqwest` para la API y `zip` para los `.zip`.
 - **Frontend:** TypeScript + Vite, sin framework pesado; es una sola vista.
 - **Pruebas:**
   - Hashes de ROMs de dominio público o generadas (por ejemplo, homebrew de GBA) comparados con RAHasher.
@@ -106,6 +105,5 @@ Todas las que rcheevos soporta, salvo CHD y 3DS cifrado. Se prueban explícitame
 ## Queda a criterio de quien construya
 
 - Nombre definitivo de la app e ícono.
-- Librería concreta de búsqueda difusa y su umbral.
 - Diseño visual dentro del esquema de una sola pantalla.
 - Cómo se distribuye (instalador `.msi` y/o `.exe` portable) y la integración continua (CI) en GitHub.
