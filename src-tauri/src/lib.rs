@@ -6,7 +6,8 @@ mod ra_api;
 mod source;
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::panic::AssertUnwindSafe;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
@@ -90,24 +91,37 @@ fn check_one(path: &str, src: &LiveSource) -> Vec<CheckResult> {
     }
 }
 
+/// Archivos comprobados a la vez: cada uno puede tener hasta 64 MB en memoria.
+const MAX_PARALLEL_FILES: usize = 4;
+
+/// Ejecuta `f` para cada elemento, en orden de llegada, con a lo sumo `limit` hilos a la vez.
+/// Un pánico en un elemento solo pierde ese elemento.
+fn for_each_bounded<T: Send>(items: Vec<T>, limit: usize, f: impl Fn(T) + Sync) {
+    let workers = limit.max(1).min(items.len());
+    let queue = Mutex::new(items.into_iter());
+    std::thread::scope(|s| {
+        for _ in 0..workers {
+            s.spawn(|| loop {
+                let next = queue.lock().unwrap_or_else(|e| e.into_inner()).next();
+                let Some(item) = next else { break };
+                let _ = std::panic::catch_unwind(AssertUnwindSafe(|| f(item)));
+            });
+        }
+    });
+}
+
 #[tauri::command]
 async fn check_paths(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
-    let src = Arc::new(new_source(&app)?);
-    let mut handles = Vec::new();
-    for path in paths {
-        let src = Arc::clone(&src);
-        let app = app.clone();
-        let handle = tauri::async_runtime::spawn_blocking(move || {
+    let src = new_source(&app)?;
+    // Fuera del hilo de la UI; cada fila se emite en cuanto termina su archivo.
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        for_each_bounded(paths, MAX_PARALLEL_FILES, |path| {
             for r in check_one(&path, &src) {
                 let _ = app.emit("result", r);
             }
         });
-        handles.push(handle);
-    }
-    for h in handles {
-        // Un fallo en una ruta no afecta a las demás.
-        let _ = h.await;
-    }
+    })
+    .await;
     Ok(())
 }
 
@@ -181,4 +195,43 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    #[test]
+    fn bounded_runs_every_item_at_most_four_at_a_time() {
+        let running = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
+        let done = Mutex::new(Vec::new());
+        for_each_bounded((0..20).collect(), MAX_PARALLEL_FILES, |i: u32| {
+            let now = running.fetch_add(1, Ordering::SeqCst) + 1;
+            peak.fetch_max(now, Ordering::SeqCst);
+            std::thread::sleep(Duration::from_millis(30));
+            running.fetch_sub(1, Ordering::SeqCst);
+            done.lock().unwrap().push(i);
+        });
+        let mut done = done.into_inner().unwrap();
+        done.sort_unstable();
+        assert_eq!(done, (0..20).collect::<Vec<_>>());
+        let peak = peak.into_inner();
+        assert!(peak <= 4, "peak {peak}");
+        assert!(peak >= 2, "no parallelism: peak {peak}");
+    }
+
+    #[test]
+    fn bounded_survives_a_panicking_item() {
+        let done = AtomicUsize::new(0);
+        for_each_bounded((0..10).collect(), 4, |i: u32| {
+            if i == 3 {
+                panic!("boom");
+            }
+            done.fetch_add(1, Ordering::SeqCst);
+        });
+        assert_eq!(done.into_inner(), 9);
+    }
 }
