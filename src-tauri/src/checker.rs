@@ -2,7 +2,8 @@
 
 use crate::inputs::Input;
 use crate::model::{CheckResult, GameEntry, GameHash, MessageCode, Status};
-use rcheevos_hash::{candidate_consoles, console_name, hash};
+use rcheevos_hash::{candidates, console_name, hash, hash_console_for};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub enum ListOutcome {
@@ -100,15 +101,21 @@ pub fn check(input: &Input, src: &dyn HashListSource) -> CheckResult {
     }
     let path = name_path(input);
     let data = input.data.as_deref();
-    let candidates = candidate_consoles(&path, data);
+    let candidates = candidates(&path, data);
     if candidates.is_empty() {
         return CheckResult { status: Status::Unsupported, ..base_result(input) };
     }
 
+    // Un hash por método: las consolas que comparten método reutilizan el MD5 (`hash_as`).
+    let mut by_method: HashMap<u32, Option<String>> = HashMap::new();
     // (consola, md5, motivo si su lista no estuvo disponible)
     let mut hashed: Vec<(u32, String, Option<MessageCode>)> = Vec::new();
-    for c in candidates {
-        let Some(h) = hash(&path, data, c) else { continue };
+    for cand in candidates {
+        let c = cand.console_id;
+        let md5 = by_method
+            .entry(cand.hash_as)
+            .or_insert_with(|| hash(&path, data, cand.hash_as));
+        let Some(h) = md5.clone() else { continue };
         match src.list(c) {
             ListOutcome::Available(games) => {
                 if let Some(game) = find_game(&games, &h) {
@@ -134,7 +141,8 @@ pub fn check_as(input: &Input, console_id: u32, src: &dyn HashListSource) -> Che
         return error_result(input, MessageCode::DiscInZip);
     }
     let path = name_path(input);
-    let Some(h) = hash(&path, input.data.as_deref(), console_id) else {
+    let data = input.data.as_deref();
+    let Some(h) = hash(&path, data, hash_console_for(&path, data, console_id)) else {
         return error_result(input, MessageCode::NoHash);
     };
     match src.list(console_id) {
@@ -318,6 +326,91 @@ mod tests {
             assert_eq!(r.status, Status::Error);
             assert_eq!(r.message, Some(MessageCode::DiscInZip));
         }
+    }
+
+    /// 16 sectors of 2048 bytes whose sector 0 starts with the Saturn volume header.
+    fn saturn_iso(dir: &tempfile::TempDir) -> PathBuf {
+        let mut iso: Vec<u8> = (0..2048 * 16u32).map(|i| (i * 13 + 1) as u8).collect();
+        iso[..16].copy_from_slice(b"SEGA SEGASATURN ");
+        let p = dir.path().join("Saturn Game (Japón).iso");
+        std::fs::write(&p, iso).unwrap();
+        p
+    }
+
+    fn file_input(p: &Path) -> Input {
+        Input {
+            source_path: p.to_path_buf(),
+            display_name: p.file_name().unwrap().to_string_lossy().into_owned(),
+            inner_name: None,
+            data: None,
+            disc_in_zip: false,
+        }
+    }
+
+    #[test]
+    fn saturn_disc_matches_saturn_list_via_sega_cd_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = saturn_iso(&dir);
+        let h = rcheevos_hash::hash(&p, None, 9).unwrap();
+        let mut s = FakeSource::default();
+        s.lists.insert(39, vec![game(77, 39, 12, &h)]);
+        let r = check(&file_input(&p), &s);
+        assert_eq!(r.status, Status::Registered);
+        assert_eq!(r.console_id, Some(39));
+        assert_eq!(r.console_name.as_deref(), Some("Sega Saturn"));
+        assert_eq!(r.md5.as_deref(), Some(h.as_str()));
+        assert_eq!(*s.asked.borrow(), vec![9, 39]);
+    }
+
+    #[test]
+    fn saturn_offered_in_selector_and_check_as_works() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = saturn_iso(&dir);
+        let h = rcheevos_hash::hash(&p, None, 9).unwrap();
+        let r = check(&file_input(&p), &FakeSource::default());
+        assert_eq!(r.status, Status::NotRegistered);
+        assert_eq!(r.console_id, Some(9));
+        assert!(r.alternatives.iter().any(|a| a.0 == 39), "{:?}", r.alternatives);
+        let mut s = FakeSource::default();
+        s.lists.insert(39, vec![game(77, 39, 12, &h)]);
+        let r = check_as(&file_input(&p), 39, &s);
+        assert_eq!(r.status, Status::Registered);
+        assert_eq!(r.console_id, Some(39));
+        assert_eq!(*s.asked.borrow(), vec![39]);
+    }
+
+    #[test]
+    fn bin_cartridge_matches_atari_2600_list() {
+        let data: Vec<u8> = (0..4096u32).map(|i| (i * 5 + 9) as u8).collect();
+        let h = md5_of("a.bin", &data, 1);
+        let mut s = FakeSource::default();
+        s.lists.insert(25, vec![game(3, 25, 20, &h)]);
+        let r = check(&input("Pitfall.bin", &data), &s);
+        assert_eq!(r.status, Status::Registered);
+        assert_eq!(r.console_id, Some(25));
+        assert_eq!(*s.asked.borrow(), vec![1, 10, 25]);
+    }
+
+    #[test]
+    fn check_as_thomson_rom_uses_msx_hash() {
+        let data = b"thomson to8 cartridge";
+        let h = md5_of("a.rom", data, 29);
+        let mut s = FakeSource::default();
+        s.lists.insert(66, vec![game(4, 66, 2, &h)]);
+        let r = check_as(&input("jeu.rom", data), 66, &s);
+        assert_eq!(r.status, Status::Registered);
+        assert_eq!(r.console_id, Some(66));
+    }
+
+    #[test]
+    fn wonderswan_ws_is_supported() {
+        let data = b"wonderswan rom";
+        let mut s = FakeSource::default();
+        let h = md5_of("x.gb", data, 4); // whole-file MD5
+        s.lists.insert(53, vec![game(8, 53, 1, &h)]);
+        let r = check(&input("x.ws", data), &s);
+        assert_eq!(r.status, Status::Registered);
+        assert_eq!(r.console_id, Some(53));
     }
 
     #[test]

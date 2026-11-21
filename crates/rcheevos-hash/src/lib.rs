@@ -1,8 +1,10 @@
 //! Safe wrapper over the rcheevos hashing code (iterator API only).
 
 mod consoles;
+mod expansions;
 
 pub use consoles::console_name;
+pub use expansions::{candidates, hash_console_for, Candidate};
 
 use std::ffi::{c_char, c_int, c_void, CString};
 use std::marker::PhantomData;
