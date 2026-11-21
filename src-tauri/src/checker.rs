@@ -4,7 +4,7 @@ use crate::inputs::Input;
 use crate::model::{CheckResult, GameEntry, GameHash, MessageCode, Status};
 use rcheevos_hash::{candidates, console_name, hash, hash_console_for};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub enum ListOutcome {
     Available(Vec<GameEntry>),
@@ -48,6 +48,26 @@ fn name_path(input: &Input) -> PathBuf {
         Some(n) => PathBuf::from(n),
         None => input.source_path.clone(),
     }
+}
+
+/// Archivos comprimidos que la app no abre (7z es un no-objetivo). rcheevos mapea `.7z` a Arcade
+/// (hash del nombre), lo que daría un "No registrado" falso para una ROM comprimida.
+const UNSUPPORTED_ARCHIVES: [&str; 2] = ["7z", "rar"];
+
+/// Fila previa común de `check` y `check_as`: disco dentro de zip o archivo comprimido.
+fn early_result(input: &Input, path: &Path) -> Option<CheckResult> {
+    if input.disc_in_zip {
+        return Some(error_result(input, MessageCode::DiscInZip));
+    }
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    UNSUPPORTED_ARCHIVES.contains(&ext.as_str()).then(|| CheckResult {
+        status: Status::Unsupported,
+        message: Some(MessageCode::ArchiveNotSupported),
+        ..base_result(input)
+    })
 }
 
 fn matched_result(
@@ -96,10 +116,10 @@ fn unmatched_result(
 }
 
 pub fn check(input: &Input, src: &dyn HashListSource) -> CheckResult {
-    if input.disc_in_zip {
-        return error_result(input, MessageCode::DiscInZip);
-    }
     let path = name_path(input);
+    if let Some(r) = early_result(input, &path) {
+        return r;
+    }
     let data = input.data.as_deref();
     let candidates = candidates(&path, data);
     if candidates.is_empty() {
@@ -137,10 +157,10 @@ pub fn check(input: &Input, src: &dyn HashListSource) -> CheckResult {
 }
 
 pub fn check_as(input: &Input, console_id: u32, src: &dyn HashListSource) -> CheckResult {
-    if input.disc_in_zip {
-        return error_result(input, MessageCode::DiscInZip);
-    }
     let path = name_path(input);
+    if let Some(r) = early_result(input, &path) {
+        return r;
+    }
     let data = input.data.as_deref();
     let Some(h) = hash(&path, data, hash_console_for(&path, data, console_id)) else {
         return error_result(input, MessageCode::NoHash);
@@ -160,7 +180,6 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
     use std::collections::HashMap;
-    use std::path::Path;
 
     #[derive(Default)]
     struct FakeSource {
@@ -411,6 +430,24 @@ mod tests {
         let r = check(&input("x.ws", data), &s);
         assert_eq!(r.status, Status::Registered);
         assert_eq!(r.console_id, Some(53));
+    }
+
+    #[test]
+    fn archives_are_unsupported_with_message() {
+        for name in ["Pokemon Emerald.7z", "juego.RAR"] {
+            let s = FakeSource::default();
+            let r = check(&input(name, b"7z\xbc\xaf\x27\x1c"), &s);
+            assert_eq!(r.status, Status::Unsupported, "{name}");
+            assert_eq!(r.message, Some(MessageCode::ArchiveNotSupported), "{name}");
+            assert!(r.md5.is_none() && r.console_id.is_none(), "{name}");
+            assert!(s.asked.borrow().is_empty(), "{name}");
+            let r = check_as(&input(name, b"x"), 27, &s);
+            assert_eq!(r.message, Some(MessageCode::ArchiveNotSupported), "{name} check_as");
+        }
+        assert_eq!(
+            serde_json::to_string(&MessageCode::ArchiveNotSupported).unwrap(),
+            "\"archiveNotSupported\""
+        );
     }
 
     #[test]

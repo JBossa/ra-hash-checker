@@ -47,6 +47,7 @@ pub enum MessageCode {
     InvalidApiKey,
     Offline,
     NoApiKey,
+    ArchiveNotSupported,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

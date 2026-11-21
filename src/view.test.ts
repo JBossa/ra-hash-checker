@@ -49,3 +49,9 @@ test('row con alternatives muestra selector', () => {
   const opts = Array.from(el.querySelectorAll('select option')).map((o) => o.textContent);
   expect(opts).toEqual(['Game Boy Advance', 'Sega CD']);
 });
+
+test('row con archiveNotSupported muestra el mensaje en es y en', () => {
+  const row = { ...base, status: 'unsupported' as const, md5: null, consoleId: null, consoleName: null, message: 'archiveNotSupported' as const };
+  expect(renderRow(row, makeTranslator('es')).textContent).toContain('Descomprime el archivo y suelta la ROM');
+  expect(renderRow(row, makeTranslator('en')).textContent).toContain('Extract the archive and drop the ROM');
+});

@@ -14,7 +14,8 @@ export type MessageCode =
   | 'readError'
   | 'invalidApiKey'
   | 'offline'
-  | 'noApiKey';
+  | 'noApiKey'
+  | 'archiveNotSupported';
 
 /** Serializado con las claves PascalCase de la API de RA. */
 export interface GameEntry {
