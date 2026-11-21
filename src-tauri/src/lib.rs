@@ -1,6 +1,8 @@
 #[allow(dead_code)]
 mod model;
 #[allow(dead_code)]
+mod cache;
+#[allow(dead_code)]
 mod ra_api;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
