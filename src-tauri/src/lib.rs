@@ -49,15 +49,37 @@ fn cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-fn new_source(app: &AppHandle) -> Result<LiveSource, String> {
-    let client = source::load_api_key().map(|k| RaClient::new(RA_BASE_URL, k));
-    let lock = Arc::clone(&app.state::<SharedFetchLock>().0);
-    Ok(LiveSource::with_lock(
-        HashCache::new(cache_dir(app)?),
-        client,
-        now_secs(),
-        lock,
-    ))
+/// Lo necesario para crear una `LiveSource`, sin crear todavía el cliente HTTP.
+struct SourceParts {
+    dir: PathBuf,
+    key: Option<String>,
+    lock: FetchLock,
+}
+
+impl SourceParts {
+    fn from_app(app: &AppHandle) -> Result<SourceParts, String> {
+        Ok(SourceParts {
+            dir: cache_dir(app)?,
+            key: source::load_api_key(),
+            lock: Arc::clone(&app.state::<SharedFetchLock>().0),
+        })
+    }
+
+    fn build(self) -> LiveSource {
+        let client = self.key.map(|k| RaClient::new(RA_BASE_URL, k));
+        LiveSource::with_lock(HashCache::new(self.dir), client, now_secs(), self.lock)
+    }
+}
+
+/// Ejecuta `f` con una `LiveSource` en un hilo bloqueante. La fuente (y su cliente HTTP bloqueante
+/// de reqwest) se crea y se destruye dentro de ese hilo: hacerlo en el runtime async hace caer la app.
+async fn with_source<R: Send + 'static>(
+    parts: SourceParts,
+    f: impl FnOnce(&LiveSource) -> R + Send + 'static,
+) -> Result<R, String> {
+    tauri::async_runtime::spawn_blocking(move || f(&parts.build()))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 fn file_name_of(path: &Path) -> String {
@@ -112,17 +134,16 @@ fn for_each_bounded<T: Send>(items: Vec<T>, limit: usize, f: impl Fn(T) + Sync) 
 
 #[tauri::command]
 async fn check_paths(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
-    let src = new_source(&app)?;
+    let parts = SourceParts::from_app(&app)?;
     // Fuera del hilo de la UI; cada fila se emite en cuanto termina su archivo.
-    let _ = tauri::async_runtime::spawn_blocking(move || {
+    with_source(parts, move |src| {
         for_each_bounded(paths, MAX_PARALLEL_FILES, |path| {
-            for r in check_one(&path, &src) {
+            for r in check_one(&path, src) {
                 let _ = app.emit("result", r);
             }
         });
     })
-    .await;
-    Ok(())
+    .await
 }
 
 #[tauri::command]
@@ -132,18 +153,15 @@ async fn check_as(
     inner_name: Option<String>,
     console_id: u32,
 ) -> Result<CheckResult, String> {
-    let src = new_source(&app)?;
-    let joined = tauri::async_runtime::spawn_blocking(move || {
-        match inputs::expand(Path::new(&source_path)) {
-            Err(code) => error_row(&source_path, code),
-            Ok(list) => match list.iter().find(|i| i.inner_name == inner_name) {
-                Some(input) => checker::check_as(input, console_id, &src),
-                None => error_row(&source_path, MessageCode::ReadError),
-            },
-        }
+    let parts = SourceParts::from_app(&app)?;
+    with_source(parts, move |src| match inputs::expand(Path::new(&source_path)) {
+        Err(code) => error_row(&source_path, code),
+        Ok(list) => match list.iter().find(|i| i.inner_name == inner_name) {
+            Some(input) => checker::check_as(input, console_id, src),
+            None => error_row(&source_path, MessageCode::ReadError),
+        },
     })
-    .await;
-    Ok(joined.map_err(|e| e.to_string())?)
+    .await
 }
 
 #[tauri::command]
@@ -221,6 +239,24 @@ mod tests {
         let peak = peak.into_inner();
         assert!(peak <= 4, "peak {peak}");
         assert!(peak >= 2, "no parallelism: peak {peak}");
+    }
+
+    /// Regresión: con una clave guardada, el cliente HTTP bloqueante de reqwest no puede crearse
+    /// (ni destruirse) dentro del runtime async; en debug eso hacía caer cada comprobación.
+    #[test]
+    fn source_with_key_works_from_an_async_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let parts = SourceParts {
+            dir: dir.path().to_path_buf(),
+            key: Some("KEY".into()),
+            lock: FetchLock::default(),
+        };
+        let r = tauri::async_runtime::block_on(async move {
+            tauri::async_runtime::spawn(async move { with_source(parts, |_| 42).await })
+                .await
+                .unwrap()
+        });
+        assert_eq!(r, Ok(42));
     }
 
     #[test]
