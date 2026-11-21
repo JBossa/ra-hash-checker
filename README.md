@@ -10,7 +10,7 @@ Una app de escritorio sencilla para una sola cosa: sueltas el archivo de un jueg
 
 - Arrastra y suelta uno o varios archivos (o haz clic para elegirlos). Para cada uno muestra la consola detectada, el hash, y el resultado: registrado (con enlace a la página del juego), registrado sin logros todavía, no registrado, o sin comparar si no hay clave ni caché.
 - Los hashes los calcula la librería oficial [rcheevos](https://github.com/RetroAchievements/rcheevos) (licencia MIT), la misma que usa RA.
-- Los `.zip` se admiten solo para cartuchos; cada ROM dentro produce su propia fila.
+- Los `.zip` se admiten para cartuchos (cada ROM dentro produce su propia fila) y para sets de arcade, que RA identifica por el nombre del zip.
 - Las listas de hashes de cada consola se descargan al necesitarlas, se guardan en caché y se renuevan solas pasados 7 días (también hay un botón manual en Ajustes). Tras la primera descarga funciona sin conexión.
 - Interfaz en español e inglés según el sistema.
 
@@ -18,9 +18,11 @@ Una app de escritorio sencilla para una sola cosa: sueltas el archivo de un jueg
 
 La app usa únicamente **tu propia** clave de la API web de RA y la API web pública; no incluye ni comparte ninguna clave común. Para obtenerla: [retroachievements.org](https://retroachievements.org) → panel de control → Keys (<https://retroachievements.org/controlpanel.php>). Pégala en Ajustes. Se guarda en el llavero del sistema, no en texto plano. Sin clave igualmente se calcula el hash, pero el resultado dice "sin comparar". Los archivos de tus juegos nunca se suben: solo se hacen peticiones de lectura a RA.
 
-### Consolas probadas
+### Consolas con pruebas automáticas
 
-GBA, GB/GBC, NES, SNES, Genesis, N64 y PS1 (cue/bin). rcheevos soporta más consolas; esas no se han probado explícitamente.
+GBA, GB/GBC, NES, SNES, Genesis, N64 y PS1 (cue/bin) tienen pruebas automáticas con archivos sintéticos; el hash de PS1 se verificó además con una imagen de disco real. rcheevos soporta más consolas; esas no tienen pruebas explícitas.
+
+Cuando varias consolas comparten el mismo método de hash (por ejemplo Sega CD y Saturn, o los `.bin` de Mega Drive, 32X, Atari 2600 y otras), la app busca el hash en la lista de cada una, en orden, y muestra la primera que coincide.
 
 ### No-objetivos (v1)
 
@@ -58,7 +60,7 @@ A simple desktop app for one thing: drop a game file into the window, it compute
 
 - Drag and drop one or more files (or click to choose them). For each one it shows the detected console, the hash, and the result: registered (with a link to the game page), registered with no achievements yet, not registered, or not compared if there is no key or cache.
 - Hashes are computed by the official [rcheevos](https://github.com/RetroAchievements/rcheevos) library (MIT license), the same one RA uses.
-- `.zip` files are supported for cartridges only; each ROM inside gets its own row.
+- `.zip` files are supported for cartridges (each ROM inside gets its own row) and for arcade sets, which RA identifies by the zip's name.
 - Each console's hash list is downloaded when needed, cached, and refreshed automatically after 7 days (there is also a manual button in Settings). After the first download it works offline.
 - Interface in Spanish and English, following the system language.
 
@@ -66,9 +68,11 @@ A simple desktop app for one thing: drop a game file into the window, it compute
 
 The app only uses **your own** RA web API key and the public web API; it ships no shared key. To get one: [retroachievements.org](https://retroachievements.org) → control panel → Keys (<https://retroachievements.org/controlpanel.php>). Paste it in Settings. It is stored in the OS keyring, not in plain text. Without a key the hash is still computed, but the result reads "not compared". Your game files are never uploaded: only read requests are sent to RA.
 
-### Tested consoles
+### Consoles with automated tests
 
-GBA, GB/GBC, NES, SNES, Genesis, N64 and PS1 (cue/bin). rcheevos supports more consoles; those have not been explicitly tested.
+GBA, GB/GBC, NES, SNES, Genesis, N64 and PS1 (cue/bin) are covered by automated tests with synthetic files; the PS1 hash was also verified with a real disc image. rcheevos supports more consoles; those have no explicit tests.
+
+When several consoles share a hash method (for example Sega CD and Saturn, or `.bin` files for Mega Drive, 32X, Atari 2600 and others), the app looks the hash up in each console's list, in order, and shows the first one that matches.
 
 ### Non-goals (v1)
 
