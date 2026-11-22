@@ -26,6 +26,15 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Juan Bossa",
+    "copyright": "© 2026 Juan Bossa. MIT License.",
+    "homepage": "https://github.com/JBossa/ra-hash-checker",
+    "shortDescription": "Check whether your ROMs match RetroAchievements hashes",
+    "longDescription": "Drag-and-drop desktop app that computes the official RetroAchievements hash of a ROM or disc image with rcheevos and checks it against the hashes RetroAchievements supports. Not affiliated with RetroAchievements.org.",
+    "resources": {
+      "../LICENSE": "LICENSE.txt",
+      "../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

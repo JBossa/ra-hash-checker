@@ -34,9 +34,18 @@ RetroAchievements only unlocks achievements when your ROM or disc image is one o
 - **Private by design**: your game files never leave your computer. The app only sends read requests to the RetroAchievements Web API.
 - **English and Spanish** interface, chosen from your system language.
 
+### Download
+
+Get the Windows installer from the **[latest release](https://github.com/JBossa/ra-hash-checker/releases/latest)**. Both formats install the same app:
+
+- `RA-Hash-Checker_x.y.z_x64-setup.exe`: the regular installer.
+- `RA-Hash-Checker_x.y.z_x64_en-US.msi`: an MSI package.
+
+The installers aren't code-signed yet, so Windows SmartScreen may warn you the first time. Click **More info → Run anyway**.
+
 ### Getting started
 
-1. Build the app from source (see below). There is no prebuilt installer yet.
+1. Install the app from the [releases page](https://github.com/JBossa/ra-hash-checker/releases/latest), or build it from source (see below).
 2. Get your free **Web API key**: log in to [retroachievements.org](https://retroachievements.org), open the [control panel](https://retroachievements.org/controlpanel.php) and copy the key from **Keys**.
 3. Open the app, click ⚙ **Settings**, paste the key and press Enter. The key is stored in your operating system's keyring, never in a plain file.
 4. Drop your games into the window.
@@ -99,9 +108,18 @@ RetroAchievements solo desbloquea logros si tu ROM o imagen de disco es una de l
 - **Privada**: tus archivos nunca salen de tu equipo. La app solo hace peticiones de lectura a la API web de RetroAchievements.
 - Interfaz en **español e inglés**, según el idioma de tu sistema.
 
+### Descarga
+
+Descarga el instalador para Windows desde la **[última versión publicada](https://github.com/JBossa/ra-hash-checker/releases/latest)**. Los dos formatos instalan la misma app:
+
+- `RA-Hash-Checker_x.y.z_x64-setup.exe`: el instalador normal.
+- `RA-Hash-Checker_x.y.z_x64_en-US.msi`: un paquete MSI.
+
+Los instaladores todavía no están firmados, así que Windows SmartScreen puede mostrar una advertencia la primera vez. Pulsa **Más información → Ejecutar de todas formas**.
+
 ### Primeros pasos
 
-1. Compila la app desde el código fuente (ver abajo). Todavía no hay instalador precompilado.
+1. Instala la app desde la [página de versiones](https://github.com/JBossa/ra-hash-checker/releases/latest) o compílala desde el código fuente (ver abajo).
 2. Consigue tu **clave de API web**, que es gratuita: entra en [retroachievements.org](https://retroachievements.org), abre el [panel de control](https://retroachievements.org/controlpanel.php) y copia la clave de **Keys**.
 3. Abre la app, pulsa ⚙ **Ajustes**, pega la clave y pulsa Enter. La clave se guarda en el llavero del sistema operativo, nunca en un archivo de texto.
 4. Suelta tus juegos en la ventana.
