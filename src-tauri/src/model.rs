@@ -74,6 +74,12 @@ pub enum MessageCode {
     CompressedDisc,
     ChdNotSupported,
     WbfsUpdatePartitionRemoved,
+    /// El formato necesita una herramienta externa que no está conectada (`CheckResult.tool`).
+    NeedsTool,
+    /// No hay espacio para la imagen temporal (`CheckResult.detail`: GB necesarios).
+    NoDiskSpace,
+    /// La herramienta externa no pudo convertir el archivo.
+    ToolFailed,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -94,4 +100,8 @@ pub struct CheckResult {
     /// `(console_id, console_name)` para el selector de consola.
     pub alternatives: Vec<(u32, String)>,
     pub message: Option<MessageCode>,
+    /// Herramienta externa implicada (`NeedsTool`, `NoDiskSpace`, `ToolFailed`), por nombre corto.
+    pub tool: Option<String>,
+    /// Dato para el mensaje (por ejemplo, los GB necesarios de `NoDiskSpace`).
+    pub detail: Option<String>,
 }

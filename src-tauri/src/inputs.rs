@@ -13,7 +13,7 @@ pub struct Input {
 }
 
 /// Extensiones que siempre son de disco.
-const DISC_EXTENSIONS: [&str; 6] = ["cue", "iso", "gdi", "chd", "m3u", "wbfs"];
+const DISC_EXTENSIONS: [&str; 9] = ["cue", "iso", "gdi", "chd", "m3u", "wbfs", "rvz", "gcz", "wia"];
 
 /// rcheevos trata un `.bin` de más de 32 MB como pista de CD y uno menor como cartucho de
 /// Mega Drive y familia (rcheevos v12.5.0, src/rhash/hash.c:1057-1075).

@@ -15,6 +15,8 @@ use std::time::{Duration, Instant};
 pub struct ToolSpec {
     pub id: &'static str,
     pub name: &'static str,
+    /// Nombre para los mensajes ("Dolphin").
+    pub short_name: &'static str,
     /// Nombres del ejecutable en este sistema.
     pub exe_names: &'static [&'static str],
     /// Extensiones (minúsculas, sin punto) que la herramienta permite comprobar.
@@ -58,6 +60,7 @@ const DOLPHIN_EXES: &[&str] = &["dolphin-tool"];
 pub static DOLPHIN: ToolSpec = ToolSpec {
     id: "dolphin",
     name: "Dolphin (DolphinTool)",
+    short_name: "Dolphin",
     exe_names: DOLPHIN_EXES,
     extensions: &["rvz", "gcz", "wia"],
     consoles: &[GAMECUBE, WII],

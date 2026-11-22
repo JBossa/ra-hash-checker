@@ -11,7 +11,8 @@
       "identifier": "opener:allow-open-url",
       "allow": [
         { "url": "https://retroachievements.org/*" },
-        { "url": "https://github.com/JBossa/ra-hash-checker*" }
+        { "url": "https://github.com/JBossa/ra-hash-checker*" },
+        { "url": "https://dolphin-emu.org/*" }
       ]
     },
     "clipboard-manager:allow-write-text"

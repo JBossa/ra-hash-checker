@@ -36,6 +36,8 @@ fn base_result(input: &Input) -> CheckResult {
         game_hashes: Vec::new(),
         alternatives: Vec::new(),
         message: None,
+        tool: None,
+        detail: None,
     }
 }
 
@@ -55,9 +57,10 @@ fn name_path(input: &Input) -> PathBuf {
 /// (hash del nombre), lo que daría un "No registrado" falso para una ROM comprimida.
 const UNSUPPORTED_ARCHIVES: [&str; 2] = ["7z", "rar"];
 
-/// Imágenes de disco comprimidas que rcheevos no lee (solo `.iso`, `.cue`...): GameCube y
-/// Wii (Dolphin), PSP y PS2 (`.cso`/`.zso`). `.wbfs` sí se lee (`rcheevos_hash`, módulo `wbfs`).
-const COMPRESSED_DISCS: [&str; 6] = ["rvz", "gcz", "wia", "ciso", "cso", "zso"];
+/// Imágenes de disco comprimidas que rcheevos no lee y ninguna herramienta externa convierte:
+/// `.ciso` (Wii) y `.cso`/`.zso` (PSP y PS2). `.wbfs` se lee (`rcheevos_hash`, módulo `wbfs`) y
+/// `.rvz`/`.gcz`/`.wia` se convierten con Dolphin (`crate::tools`).
+const COMPRESSED_DISCS: [&str; 3] = ["ciso", "cso", "zso"];
 
 /// Fila previa común de `check` y `check_as`: disco dentro de zip o archivo comprimido.
 fn early_result(input: &Input, path: &Path) -> Option<CheckResult> {
@@ -68,6 +71,15 @@ fn early_result(input: &Input, path: &Path) -> Option<CheckResult> {
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
+    if let Some(tool) = crate::tools::tool_for_extension(&ext) {
+        // Llega aquí solo si la herramienta no está conectada (lib.rs convierte antes si lo está).
+        return Some(CheckResult {
+            status: Status::Unsupported,
+            message: Some(MessageCode::NeedsTool),
+            tool: Some(tool.short_name.to_string()),
+            ..base_result(input)
+        });
+    }
     let message = if UNSUPPORTED_ARCHIVES.contains(&ext.as_str()) {
         MessageCode::ArchiveNotSupported
     } else if COMPRESSED_DISCS.contains(&ext.as_str()) {
@@ -136,12 +148,27 @@ fn no_hash_message(e: HashError) -> MessageCode {
 }
 
 pub fn check(input: &Input, src: &dyn HashListSource) -> CheckResult {
+    check_filtered(input, src, None)
+}
+
+/// Como `check`, pero solo con las consolas `consoles` y sin selector de consola: para la imagen
+/// que produce una herramienta externa (un `.iso` de Dolphin es de GameCube o de Wii).
+pub fn check_only(input: &Input, consoles: &[u32], src: &dyn HashListSource) -> CheckResult {
+    let mut r = check_filtered(input, src, Some(consoles));
+    r.alternatives.clear();
+    r
+}
+
+fn check_filtered(input: &Input, src: &dyn HashListSource, only: Option<&[u32]>) -> CheckResult {
     let path = name_path(input);
     if let Some(r) = early_result(input, &path) {
         return r;
     }
     let data = input.data.as_deref();
-    let candidates = candidates(&path, data);
+    let mut candidates = candidates(&path, data);
+    if let Some(only) = only {
+        candidates.retain(|c| only.contains(&c.console_id));
+    }
     if candidates.is_empty() {
         return CheckResult { status: Status::Unsupported, ..base_result(input) };
     }
@@ -499,7 +526,7 @@ mod tests {
     #[test]
     fn compressed_discs_ask_to_convert() {
         let s = FakeSource::default();
-        for name in ["Super Mario Galaxy.rvz", "Galaxy.GCZ", "game.cso"] {
+        for name in ["Galaxy.ciso", "game.cso", "game.ZSO"] {
             let r = check(&input(name, b"x"), &s);
             assert_eq!(r.status, Status::Unsupported, "{name}");
             assert_eq!(r.message, Some(MessageCode::CompressedDisc), "{name}");
@@ -526,6 +553,31 @@ mod tests {
             MessageCode::WbfsUpdatePartitionRemoved
         );
         assert_eq!(no_hash_message(HashError::Failed), MessageCode::NoHash);
+    }
+
+    #[test]
+    fn dolphin_formats_without_the_tool_ask_for_it() {
+        let s = FakeSource::default();
+        for name in ["Super Mario Galaxy.rvz", "Galaxy.GCZ", "game.wia"] {
+            let r = check(&input(name, b"x"), &s);
+            assert_eq!(r.status, Status::Unsupported, "{name}");
+            assert_eq!(r.message, Some(MessageCode::NeedsTool), "{name}");
+            assert_eq!(r.tool.as_deref(), Some("Dolphin"), "{name}");
+        }
+    }
+
+    #[test]
+    fn check_only_limits_consoles_and_hides_the_selector() {
+        // Un .bin de cartucho se compara con Mega Drive y familia; limitado a Atari 2600 solo
+        // pregunta por esa lista y no ofrece alternativas.
+        let (data, _) = bin_hashed();
+        let s = FakeSource::default();
+        let r = check_only(&input("x.bin", &data), &[25], &s);
+        assert_eq!(*s.asked.borrow(), vec![25]);
+        assert_eq!(r.console_id, Some(25));
+        assert!(r.alternatives.is_empty());
+        let none = check_only(&input("x.bin", &data), &[16, 19], &FakeSource::default());
+        assert_eq!(none.status, Status::Unsupported);
     }
 
     #[test]
