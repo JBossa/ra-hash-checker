@@ -4,6 +4,7 @@ mod inputs;
 mod model;
 mod ra_api;
 mod source;
+mod tools;
 
 use std::path::{Path, PathBuf};
 use std::panic::AssertUnwindSafe;
