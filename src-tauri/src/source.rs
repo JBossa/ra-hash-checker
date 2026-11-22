@@ -2,7 +2,7 @@
 
 use crate::cache::HashCache;
 use crate::checker::{HashListSource, ListOutcome};
-use crate::model::{GameHash, MessageCode};
+use crate::model::{GameHash, GameInfo, MessageCode};
 use crate::ra_api::{RaClient, RaError};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -55,6 +55,17 @@ impl LiveSource {
 
     fn failures(&self) -> MutexGuard<'_, Failures> {
         lock_ignoring_poison(&self.failures)
+    }
+
+    /// Portada y metadatos del juego: de la caché o de la API (y se guardan). `None` sin clave,
+    /// sin conexión o si la respuesta no se entiende; la UI sigue mostrando el resto de la ficha.
+    pub fn game_info(&self, game_id: u32) -> Option<GameInfo> {
+        if let Some(info) = self.cache.load_game_info(game_id) {
+            return Some(info);
+        }
+        let info = self.client.as_ref()?.get_game(game_id).ok()?;
+        let _ = self.cache.save_game_info(game_id, &info);
+        Some(info)
     }
 }
 
@@ -462,6 +473,25 @@ mod tests {
         );
         assert!(src.game_hashes(7).is_none());
         assert!(src.game_hashes(7).is_none());
+        m.assert();
+    }
+
+    #[test]
+    fn game_info_is_fetched_once_then_cached() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut server = mockito::Server::new();
+        let m = server
+            .mock("GET", "/API_GetGame.php")
+            .match_query(mockito::Matcher::Any)
+            .with_body(r#"{"ImageBoxArt":"/Images/9.png"}"#)
+            .expect(1)
+            .create();
+        let cache = HashCache::new(dir.path().to_path_buf());
+        let src = LiveSource::new(cache, Some(RaClient::new(&server.url(), "K".into())), NOW);
+        assert_eq!(src.game_info(3).unwrap().image_box_art.as_deref(), Some("/Images/9.png"));
+        let offline = LiveSource::new(HashCache::new(dir.path().to_path_buf()), None, NOW);
+        assert_eq!(offline.game_info(3).unwrap().image_box_art.as_deref(), Some("/Images/9.png"));
+        assert!(offline.game_info(4).is_none());
         m.assert();
     }
 }

@@ -3,38 +3,132 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/src/logo.svg" />
     <link rel="stylesheet" href="/src/styles.css" />
     <title>RA Hash Checker</title>
     <script type="module" src="/src/main.ts" defer></script>
   </head>
   <body>
-    <header>
-      <h1>RA Hash Checker</h1>
-      <button id="settings-btn" type="button" aria-label="Settings">⚙</button>
-    </header>
-    <main>
-      <div id="drop" class="drop" role="button" tabindex="0">
-        <p id="drop-text"></p>
-        <p id="no-key" class="no-key" hidden>
-          <span id="no-key-text"></span>
-          <a id="get-key" href="#"></a>
-        </p>
+    <header class="topbar">
+      <div class="brand">
+        <img class="logo" src="/src/logo.svg" alt="" width="32" height="32" />
+        <span class="wordmark">RA Hash Checker</span>
       </div>
-      <div id="results"></div>
-    </main>
-    <dialog id="settings">
-      <form method="dialog">
-        <h2 id="settings-title"></h2>
-        <label id="key-label" for="api-key"></label>
-        <input id="api-key" type="password" autocomplete="off" spellcheck="false" />
-        <p id="key-hint" class="hint"></p>
-        <div class="actions">
-          <button id="save-key" type="submit"></button>
-          <button id="refresh" type="button"></button>
+      <div class="top-actions">
+        <button id="formats-btn" class="btn btn-ghost btn-sm" type="button">
+          <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
+            <path d="M6 3h9l3 3v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zM9 8h6v6H9zM9 18v3M12 18v3M15 18v3" />
+          </svg>
+          <span id="formats-btn-text"></span>
+        </button>
+        <button id="settings-btn" class="icon-btn" type="button">
+          <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
+            <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z" />
+            <path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4.9a7.7 7.7 0 0 0-2.6-1.5L14 2.4h-4l-.4 2.5A7.7 7.7 0 0 0 7 6.4l-2.4-.9-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-.9a7.7 7.7 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.7 7.7 0 0 0 2.6-1.5l2.4.9 2-3.4z" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="no-key" class="notice" hidden>
+      <span id="no-key-text"></span>
+      <button id="add-key" class="btn btn-gold btn-sm" type="button"></button>
+    </div>
+
+    <main id="app" class="is-empty">
+      <div id="drop" class="drop" role="button" tabindex="0">
+        <svg viewBox="0 0 24 24" class="icon drop-icon" aria-hidden="true">
+          <path d="M6 3h9l3 3v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zM9 8h6v6H9zM9 18v3M12 18v3M15 18v3" />
+        </svg>
+        <div class="drop-text">
+          <p id="drop-title" class="drop-title"></p>
+          <p id="drop-sub" class="drop-sub"></p>
+          <p id="drop-compact" class="drop-compact"></p>
+          <button id="formats-link" class="link link-btn" type="button"></button>
         </div>
-        <p id="last-refresh" class="hint"></p>
-        <p id="settings-msg" class="hint" role="status"></p>
-        <div class="actions"><button id="close-settings" type="button"></button></div>
+      </div>
+
+      <section id="history" class="history" hidden>
+        <div class="toolbar">
+          <div class="filters" role="group">
+            <button type="button" class="filter is-active" data-filter="all"><span data-label="ui.filterAll"></span><span class="count" data-count="all">0</span></button>
+            <button type="button" class="filter" data-filter="ok"><span data-label="ui.filterOk"></span><span class="count" data-count="ok">0</span></button>
+            <button type="button" class="filter" data-filter="missing"><span data-label="ui.filterMissing"></span><span class="count" data-count="missing">0</span></button>
+            <button type="button" class="filter" data-filter="other"><span data-label="ui.filterOther"></span><span class="count" data-count="other">0</span></button>
+          </div>
+          <span id="busy" class="busy" role="status" hidden><span class="spinner"></span><span id="busy-text"></span></span>
+          <button id="clear" class="btn btn-ghost btn-sm" type="button"></button>
+        </div>
+        <div id="results" class="results" data-filter="all"></div>
+        <p id="filter-empty" class="filter-empty" hidden></p>
+      </section>
+    </main>
+
+    <div id="overlay" class="overlay" hidden>
+      <div class="overlay-box">
+        <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M12 4v12M6 10l6 6 6-6M5 20h14" /></svg>
+        <p id="overlay-text"></p>
+      </div>
+    </div>
+
+    <dialog id="formats" class="settings formats">
+      <div class="settings-head">
+        <h2 id="formats-title"></h2>
+        <button id="close-formats" class="icon-btn" type="button">
+          <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
+        </button>
+      </div>
+      <div class="formats-search">
+        <input id="formats-q" type="search" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="formats-body">
+        <ul id="formats-notes" class="formats-notes"></ul>
+        <ul id="formats-list" class="formats-list"></ul>
+      </div>
+    </dialog>
+
+    <dialog id="settings" class="settings">
+      <form method="dialog">
+        <div class="settings-head">
+          <h2 id="settings-title"></h2>
+          <button id="close-settings" class="icon-btn" type="button">
+            <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
+          </button>
+        </div>
+
+        <section class="settings-section">
+          <div class="section-head">
+            <h3 id="key-section"></h3>
+            <span id="key-status" class="pill"></span>
+          </div>
+          <p id="key-help" class="hint"></p>
+          <div class="key-field">
+            <input id="api-key" type="password" autocomplete="off" spellcheck="false" />
+            <button id="toggle-key" class="btn btn-ghost btn-sm" type="button"></button>
+          </div>
+          <div class="actions">
+            <button id="save-key" class="btn btn-gold" type="submit"></button>
+            <button id="delete-key" class="btn btn-ghost" type="button"></button>
+            <a id="get-key" class="link" href="#"></a>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3 id="lists-section"></h3>
+          <p id="lists-help" class="hint"></p>
+          <div class="actions">
+            <button id="refresh" class="btn btn-ghost" type="button"></button>
+            <span id="last-refresh" class="hint"></span>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3 id="about-section"></h3>
+          <p id="about-text" class="hint"></p>
+          <p class="hint"><span id="app-version"></span> <a id="source-link" class="link" href="#"></a></p>
+        </section>
+
+        <p id="settings-msg" class="settings-msg" role="status"></p>
       </form>
     </dialog>
   </body>

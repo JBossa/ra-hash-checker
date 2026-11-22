@@ -2,9 +2,11 @@
 
 mod consoles;
 mod expansions;
+mod formats;
 
 pub use consoles::console_name;
 pub use expansions::{candidates, hash_console_for, Candidate};
+pub use formats::formats_by_console;
 
 use std::ffi::{c_char, c_int, c_void, CString};
 use std::marker::PhantomData;

@@ -1,6 +1,6 @@
 //! Caché en disco de las listas de hashes de RetroAchievements (una por consola).
 
-use crate::model::{GameEntry, GameHash};
+use crate::model::{GameEntry, GameHash, GameInfo};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -30,6 +30,10 @@ impl HashCache {
 
     fn game_path(&self, game_id: u32) -> PathBuf {
         self.dir.join("games").join(format!("{game_id}.json"))
+    }
+
+    fn info_path(&self, game_id: u32) -> PathBuf {
+        self.dir.join("info").join(format!("{game_id}.json"))
     }
 
     /// Devuelve `None` si el archivo no existe o está corrupto.
@@ -62,6 +66,15 @@ impl HashCache {
 
     pub fn save_game_hashes(&self, game_id: u32, hashes: &[GameHash]) -> std::io::Result<()> {
         write_atomic(&self.game_path(game_id), &serde_json::to_vec(hashes)?)
+    }
+
+    pub fn load_game_info(&self, game_id: u32) -> Option<GameInfo> {
+        let bytes = std::fs::read(self.info_path(game_id)).ok()?;
+        serde_json::from_slice(&bytes).ok()
+    }
+
+    pub fn save_game_info(&self, game_id: u32, info: &GameInfo) -> std::io::Result<()> {
+        write_atomic(&self.info_path(game_id), &serde_json::to_vec(info)?)
     }
 
     /// Consolas con una lista en caché que se puede leer.
@@ -226,5 +239,14 @@ mod tests {
         let cons = c.cached_consoles();
         assert!(cons.contains(&5) && cons.contains(&12));
         assert_eq!(c.last_refresh(), Some(20));
+    }
+
+    #[test]
+    fn roundtrip_game_info() {
+        let (_d, c) = cache();
+        assert_eq!(c.load_game_info(7), None);
+        let info = GameInfo { image_box_art: Some("/Images/1.png".into()), ..GameInfo::default() };
+        c.save_game_info(7, &info).unwrap();
+        assert_eq!(c.load_game_info(7), Some(info));
     }
 }
