@@ -311,10 +311,8 @@ fn unique_stem() -> String {
 pub fn convert(spec: &ToolSpec, exe: &Path, input: &Path, tmp: &Path) -> Result<Converted, ToolError> {
     std::fs::create_dir_all(tmp).map_err(|_| ToolError::Failed)?;
     let needed = output_size(input).unwrap_or(spec.max_output) + SPACE_MARGIN;
-    if let Some(free) = free_space(tmp) {
-        if free < needed {
-            return Err(ToolError::NoSpace(needed));
-        }
+    if free_space(tmp).is_some_and(|free| free < needed) {
+        return Err(ToolError::NoSpace(needed));
     }
     let stem = unique_stem();
     let out = Converted { path: tmp.join(format!("{stem}.{}", spec.output_ext)), work: tmp.join(format!("{stem}-work")) };
