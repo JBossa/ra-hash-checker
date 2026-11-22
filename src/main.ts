@@ -10,7 +10,7 @@ import { fillGameInfo, renderRow, statusGroup, type CheckResult, type GameInfo, 
 import { wireSettingsForm } from './settings';
 
 const t = makeTranslator(navigator.language || 'en');
-const KEYS_URL = 'https://retroachievements.org/settings';
+const KEYS_URL = 'https://retroachievements.org/controlpanel.php';
 const REPO_URL = 'https://github.com/JBossa/ra-hash-checker';
 
 interface SettingsView {
