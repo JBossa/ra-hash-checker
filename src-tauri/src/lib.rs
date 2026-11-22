@@ -14,7 +14,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::cache::HashCache;
-use crate::model::{CheckResult, MessageCode, Status};
+use crate::model::{CheckResult, GameInfo, MessageCode, Status};
 use crate::ra_api::{RaClient, RaError};
 use crate::source::{FetchLock, LiveSource};
 
@@ -99,6 +99,7 @@ fn error_row(path: &str, code: MessageCode) -> CheckResult {
         status: Status::Error,
         game: None,
         matched_name: None,
+        game_hashes: Vec::new(),
         alternatives: Vec::new(),
         message: Some(code),
     }
@@ -165,6 +166,12 @@ async fn check_as(
 }
 
 #[tauri::command]
+async fn game_info(app: AppHandle, game_id: u32) -> Result<Option<GameInfo>, String> {
+    let parts = SourceParts::from_app(&app)?;
+    with_source(parts, move |src| src.game_info(game_id)).await
+}
+
+#[tauri::command]
 fn get_settings(app: AppHandle) -> Result<SettingsView, String> {
     Ok(SettingsView {
         has_api_key: source::load_api_key().is_some(),
@@ -207,6 +214,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             check_paths,
             check_as,
+            game_info,
             get_settings,
             set_api_key,
             refresh_lists

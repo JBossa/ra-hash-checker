@@ -27,6 +27,29 @@ pub struct GameHash {
     pub labels: Vec<String>,
 }
 
+/// Ficha de `API_GetGame.php`: solo los campos que muestra la UI. Las imágenes son rutas
+/// relativas al servidor de medios de RA (`/Images/000001.png`).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "PascalCase")]
+pub struct GameInfo {
+    #[serde(default)]
+    pub image_icon: Option<String>,
+    #[serde(default)]
+    pub image_title: Option<String>,
+    #[serde(default)]
+    pub image_ingame: Option<String>,
+    #[serde(default)]
+    pub image_box_art: Option<String>,
+    #[serde(default)]
+    pub publisher: Option<String>,
+    #[serde(default)]
+    pub developer: Option<String>,
+    #[serde(default)]
+    pub genre: Option<String>,
+    #[serde(default)]
+    pub released: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Status {
@@ -62,6 +85,9 @@ pub struct CheckResult {
     pub status: Status,
     pub game: Option<GameEntry>,
     pub matched_name: Option<String>,
+    /// Todos los hashes compatibles del juego que coincidió (vacío si no hay coincidencia
+    /// o no se pudieron descargar).
+    pub game_hashes: Vec<GameHash>,
     /// `(console_id, console_name)` para el selector de consola.
     pub alternatives: Vec<(u32, String)>,
     pub message: Option<MessageCode>,

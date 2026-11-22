@@ -33,6 +33,7 @@ fn base_result(input: &Input) -> CheckResult {
         status: Status::Error,
         game: None,
         matched_name: None,
+        game_hashes: Vec::new(),
         alternatives: Vec::new(),
         message: None,
     }
@@ -77,11 +78,11 @@ fn matched_result(
     game: &GameEntry,
     src: &dyn HashListSource,
 ) -> CheckResult {
-    let matched_name = src.game_hashes(game.id).and_then(|hs| {
-        hs.into_iter()
-            .find(|h| h.md5.eq_ignore_ascii_case(md5))
-            .map(|h| h.name)
-    });
+    let game_hashes = src.game_hashes(game.id).unwrap_or_default();
+    let matched_name = game_hashes
+        .iter()
+        .find(|h| h.md5.eq_ignore_ascii_case(md5))
+        .map(|h| h.name.clone());
     CheckResult {
         console_id: Some(console_id),
         console_name: Some(console_name(console_id).to_string()),
@@ -93,6 +94,7 @@ fn matched_result(
         },
         game: Some(game.clone()),
         matched_name,
+        game_hashes,
         ..base_result(input)
     }
 }
@@ -322,6 +324,28 @@ mod tests {
         );
         let r = check(&input("a.gba", GBA_DATA), &s);
         assert_eq!(r.matched_name.as_deref(), Some("Juego (USA)"));
+    }
+
+    #[test]
+    fn matched_result_includes_all_game_hashes() {
+        let (mut s, h) = gba_source(10);
+        s.hashes.insert(
+            42,
+            vec![
+                GameHash { md5: "0".repeat(32), name: "Otro".into(), labels: vec![] },
+                GameHash { md5: h.to_uppercase(), name: "Juego (USA)".into(), labels: vec!["nointro".into()] },
+            ],
+        );
+        let r = check(&input("a.gba", GBA_DATA), &s);
+        assert_eq!(r.game_hashes.len(), 2);
+        assert_eq!(r.game_hashes[1].labels, vec!["nointro".to_string()]);
+    }
+
+    #[test]
+    fn unmatched_result_has_no_game_hashes() {
+        let s = FakeSource::default();
+        let r = check(&input("a.gba", GBA_DATA), &s);
+        assert!(r.game_hashes.is_empty());
     }
 
     #[test]

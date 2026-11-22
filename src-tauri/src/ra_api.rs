@@ -5,7 +5,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use crate::model::{GameEntry, GameHash};
+use crate::model::{GameEntry, GameHash, GameInfo};
 
 /// URL del repositorio para el User-Agent.
 pub const REPO_URL: &str = "https://github.com/JBossa/ra-hash-checker";
@@ -61,6 +61,11 @@ impl RaClient {
         let url = format!("{}/API_GetGameHashes.php", self.base_url);
         let resp: HashesResponse = self.get_json(&url, &[("i", game_id.to_string())])?;
         Ok(resp.results)
+    }
+
+    pub fn get_game(&self, game_id: u32) -> Result<GameInfo, RaError> {
+        let url = format!("{}/API_GetGame.php", self.base_url);
+        self.get_json(&url, &[("i", game_id.to_string())])
     }
 
     fn get_json<T: DeserializeOwned>(&self, url: &str, params: &[(&str, String)]) -> Result<T, RaError> {
@@ -137,6 +142,29 @@ mod tests {
         let hashes = client.get_game_hashes(9).unwrap();
         assert_eq!(hashes[0].name, "T (USA)");
         assert_eq!(hashes[0].md5, "abc");
+    }
+
+    #[test]
+    fn game_parses_info() {
+        let mut server = mockito::Server::new();
+        let m = server
+            .mock("GET", "/API_GetGame.php")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("i".into(), "7".into()),
+                Matcher::UrlEncoded("y".into(), "KEY".into()),
+            ]))
+            .with_body(
+                r#"{"Title":"T","ConsoleID":5,"ImageIcon":"/Images/0.png","ImageBoxArt":"/Images/1.png",
+                    "Publisher":"Nintendo","Developer":null,"Genre":"Action","Released":"2002-11-18","Flags":null}"#,
+            )
+            .create();
+        let client = RaClient::new(&server.url(), "KEY".into());
+        let info = client.get_game(7).unwrap();
+        m.assert();
+        assert_eq!(info.image_box_art.as_deref(), Some("/Images/1.png"));
+        assert_eq!(info.publisher.as_deref(), Some("Nintendo"));
+        assert_eq!(info.developer, None);
+        assert_eq!(info.image_title, None);
     }
 
     #[test]
