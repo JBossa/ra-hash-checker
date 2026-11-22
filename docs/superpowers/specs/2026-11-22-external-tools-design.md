@@ -58,7 +58,7 @@ En orden: `PATH`; `%ProgramFiles%\Dolphin*\`, `%ProgramFiles(x86)%\Dolphin*\`, `
 En `check_one` (lib.rs), antes de `inputs::expand`, si la extensión pertenece a una herramienta:
 - **Sin configurar o no válida** → fila `Unsupported` con `MessageCode::NeedsTool` y `tool: Some("dolphin")`.
 - **Configurada** →
-  1. Emitir `progress` `{ sourcePath, fileName, tool: "Dolphin" }`; la UI muestra una tarjeta «Convirtiendo con Dolphin…».
+  1. Emitir `progress` `{ sourcePath, fileName, tool: "Dolphin", stage }` (ver decisiones más abajo).
   2. Comprobar espacio libre en la carpeta temporal (`app_cache_dir/tmp`) ≥ `output_size` + 64 MB; si no,
      `MessageCode::NoDiskSpace` con los GB necesarios en el mensaje (campo `detail`).
   3. Un solo `convert` a la vez en toda la app (mutex en el estado de Tauri). El hijo se mata si el guard se suelta.
@@ -81,6 +81,18 @@ En `check_one` (lib.rs), antes de `inputs::expand`, si la extensión pertenece a
 - Mensaje `needsTool`: botón «Abrir herramientas externas» que abre Ajustes con la sección visible.
 - Formatos compatibles: las extensiones de herramientas aparecen en GameCube y Wii con la marca «Dolphin».
 - `opener`: permitir `https://dolphin-emu.org/*`.
+
+### Decisiones tras la revisión (decisiones del implementador)
+- **Cola propia para conversiones.** `check_paths` separa los archivos que necesitan herramienta: los normales siguen
+  en el grupo de 4 hilos y los de herramienta van, en orden, a una cola de un solo hilo (además del mutex global, por
+  si llegan de otro soltado). Al entrar en la cola se emite `progress` con `stage: "queued"` (tarjeta «En cola para
+  Dolphin…»); al empezar, `stage: "converting"` («Convirtiendo con Dolphin…»).
+- **Validación solo al elegir o detectar.** Se guarda solo la ruta. En uso solo se comprueba que el archivo exista
+  («no encontrada» si no); un DolphinTool roto o antiguo se ve como `ToolFailed`. `get_tools` no ejecuta nada.
+  Estados de la tarjeta: «conectada» / «no encontrada» / «sin configurar»; «no válida» es el error al elegir.
+- **Plataformas.** Windows completo. En macOS/Linux: misma sección y *Elegir…* sin filtro de extensión, nombres
+  `dolphin-tool` (Linux) y `Dolphin.app/Contents/MacOS/dolphin-tool` (macOS), detección solo por `PATH`;
+  `CREATE_NO_WINDOW` solo en Windows. La CI (Windows) prueba la parte común.
 
 ## Riesgos
 - Conversiones de Wii de doble capa: 8,5 GB temporales y unos minutos. Se avisa antes por espacio; no hay cancelación.
