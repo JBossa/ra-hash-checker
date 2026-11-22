@@ -9,6 +9,13 @@ import { makeTranslator } from './i18n';
 import { fillGameInfo, renderRow, statusGroup, type CheckResult, type GameInfo, type StatusGroup } from './view';
 import { wireSettingsForm } from './settings';
 import { renderFormats, type ConsoleFormats } from './formats';
+import {
+  renderPending,
+  renderToolCard,
+  toolExtensionsByConsole,
+  type ToolProgress,
+  type ToolView,
+} from './tools';
 
 const t = makeTranslator(navigator.language || 'en');
 const KEYS_URL = 'https://retroachievements.org/controlpanel.php';
@@ -62,6 +69,8 @@ function applyStaticText() {
   $('about-section').textContent = t('ui.aboutSection');
   $('about-text').textContent = t('ui.about');
   $('source-link').textContent = t('ui.sourceCode');
+  $('tools-title').textContent = t('ui.toolsSection');
+  $('tools-help').textContent = t('ui.toolsHelp');
   $('formats-btn-text').textContent = t('ui.formats');
   $('formats-link').textContent = t('ui.formatsLink');
   $('formats-title').textContent = t('ui.formats');
@@ -153,9 +162,28 @@ function showCard(r: CheckResult, replace?: HTMLElement): HTMLElement {
   return card;
 }
 
+/** Tarjetas provisionales de archivos que esperan o se convierten con una herramienta. */
+const pendingCards = new Map<string, HTMLElement>();
+
+function showPending(p: ToolProgress) {
+  const card = renderPending(p, t);
+  const old = pendingCards.get(p.sourcePath);
+  if (old) old.replaceWith(card);
+  else results.prepend(card);
+  pendingCards.set(p.sourcePath, card);
+  updateHistory();
+}
+
+function showResult(r: CheckResult) {
+  const placeholder = pendingCards.get(r.sourcePath);
+  pendingCards.delete(r.sourcePath);
+  showCard(r, placeholder);
+}
+
 function clearHistory() {
   results.replaceChildren();
   groups.clear();
+  pendingCards.clear();
   setFilter('all');
 }
 
@@ -183,6 +211,8 @@ function errorResult(p: string): CheckResult {
     gameHashes: [],
     alternatives: [],
     message: 'readError',
+    tool: null,
+    detail: null,
   };
 }
 
@@ -207,6 +237,10 @@ async function pickFiles() {
 // Enlaces y copiar hash (delegación de eventos).
 results.addEventListener('click', async (ev) => {
   const target = ev.target as HTMLElement;
+  if (target.closest('[data-action="open-tools"]')) {
+    void openSettings('tools');
+    return;
+  }
   const link = target.closest<HTMLElement>('[data-url]');
   if (link) {
     ev.preventDefault();
@@ -279,7 +313,8 @@ void getCurrentWebview().onDragDropEvent((ev) => {
   if (p.type === 'drop') void checkPaths(p.paths);
 });
 
-void listen<CheckResult>('result', (ev) => showCard(ev.payload));
+void listen<CheckResult>('result', (ev) => showResult(ev.payload));
+void listen<ToolProgress>('progress', (ev) => showPending(ev.payload));
 
 // --- Formatos compatibles ------------------------------------------------------------------
 
@@ -289,12 +324,13 @@ let formats: ConsoleFormats[] | null = null;
 
 function showFormats() {
   if (!formats) return;
-  $('formats-list').replaceChildren(...renderFormats(formats, formatsQuery.value, t));
+  $('formats-list').replaceChildren(...renderFormats(formats, formatsQuery.value, t, toolExtensionsByConsole(tools)));
 }
 
 async function openFormats(ev?: Event) {
   ev?.stopPropagation(); // el enlace está dentro de la zona de soltar
   formats ??= await invoke<ConsoleFormats[]>('supported_formats').catch(() => []);
+  await loadTools();
   formatsQuery.value = '';
   showFormats();
   formatsDialog.showModal();
@@ -325,14 +361,76 @@ function setKeyVisible(visible: boolean) {
   $('toggle-key').textContent = t(visible ? 'ui.hide' : 'ui.show');
 }
 
-async function openSettings() {
+async function openSettings(section?: 'tools') {
   keyInput.value = '';
   setKeyVisible(false);
   say('');
-  await loadSettings();
+  await Promise.all([loadSettings(), loadTools()]);
   dialog.showModal();
-  keyInput.focus();
+  if (section === 'tools') $('tools-section').scrollIntoView({ block: 'start' });
+  else keyInput.focus();
 }
+
+// --- Herramientas externas -------------------------------------------------------------------
+
+let tools: ToolView[] = [];
+
+function renderTools() {
+  $('tools-list').replaceChildren(...tools.map((tool) => renderToolCard(tool, t)));
+}
+
+async function loadTools() {
+  tools = await invoke<ToolView[]>('get_tools').catch(() => []);
+  renderTools();
+}
+
+function updateTool(view: ToolView) {
+  tools = tools.map((tool) => (tool.id === view.id ? view : tool));
+  renderTools();
+}
+
+/** Ejecuta una acción sobre una herramienta y muestra el resultado en Ajustes. */
+async function toolAction(run: () => Promise<ToolView>, done: string) {
+  try {
+    updateTool(await run());
+    say(t(done), 'ok');
+  } catch (e) {
+    renderTools();
+    say(msg(e), 'error');
+  }
+}
+
+$('tools-list').addEventListener('click', async (ev) => {
+  const button = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]');
+  const id = button?.closest<HTMLElement>('[data-tool-id]')?.dataset.toolId;
+  const tool = tools.find((x) => x.id === id);
+  if (!button || !id || !tool) return;
+  switch (button.dataset.action) {
+    case 'detect':
+      button.disabled = true;
+      button.textContent = t('ui.toolDetecting');
+      await toolAction(() => invoke<ToolView>('detect_tool', { id }), 'ui.toolSaved');
+      break;
+    case 'choose': {
+      const windows = navigator.userAgent.includes('Windows');
+      const picked = await open({
+        multiple: false,
+        directory: false,
+        filters: windows ? [{ name: tool.name, extensions: ['exe'] }] : undefined,
+      });
+      if (typeof picked === 'string') {
+        await toolAction(() => invoke<ToolView>('set_tool_path', { id, path: picked }), 'ui.toolSaved');
+      }
+      break;
+    }
+    case 'clear':
+      await toolAction(() => invoke<ToolView>('clear_tool', { id }), 'ui.toolCleared');
+      break;
+    case 'download':
+      await openUrl(tool.downloadUrl);
+      break;
+  }
+});
 
 async function storeKey(key: string, done: string) {
   try {

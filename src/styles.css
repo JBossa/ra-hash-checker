@@ -483,6 +483,38 @@ code {
 .settings-msg[data-kind="ok"] { color: var(--ok); }
 .settings-msg[data-kind="error"] { color: var(--bad); }
 
+/* --- Herramientas externas ---------------------------------------------------------------- */
+.tools-list { display: flex; flex-direction: column; gap: 10px; }
+.tool-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.tool-card h4 { margin: 0; font-size: 14px; }
+.tool-connected { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.tool-path { width: max-content; max-width: 100%; font-size: 12px; }
+.tool-warn { color: var(--bad); }
+.link-btn-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+}
+.link-btn-inline .icon { width: 14px; height: 14px; }
+.card-pending { border-left-color: var(--gold); }
+.pending-line { display: flex; align-items: center; gap: 8px; color: var(--gold-hi); }
+.ext-tool { display: inline-flex; align-items: center; gap: 4px; outline: 1px dashed var(--line-strong); }
+.ext-tool-name { font-family: inherit; font-size: 10px; font-weight: 700; color: var(--gold-hi); }
+
 /* --- Formatos compatibles ----------------------------------------------------------------- */
 .formats { width: min(680px, calc(100vw - 32px)); height: min(640px, calc(100vh - 48px)); }
 .formats[open] { display: flex; flex-direction: column; }

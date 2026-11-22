@@ -34,3 +34,13 @@ test('extensión sin consola muestra un aviso con la extensión', () => {
   expect(rows).toHaveLength(1);
   expect(rows[0].textContent).toContain('.rvz');
 });
+
+test('las extensiones de herramientas se buscan y se marcan con su herramienta', () => {
+  const toolExts = new Map([['Wii', [{ ext: 'rvz', tool: 'Dolphin' }]]]);
+  expect(filterFormats(list, 'rvz', toolExts).map((c) => c.consoleId)).toEqual([19]);
+  const rows = renderFormats(list, '.rvz', makeTranslator('es'), toolExts);
+  const chip = rows[0].querySelector('.ext-tool');
+  expect(chip?.classList.contains('is-hit')).toBe(true);
+  expect(chip?.textContent).toBe('.rvzDolphin');
+  expect(chip?.getAttribute('title')).toBe('Necesita Dolphin');
+});

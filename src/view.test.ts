@@ -24,6 +24,8 @@ const base: CheckResult = {
   gameHashes: [],
   alternatives: [],
   message: null,
+  tool: null,
+  detail: null,
 };
 
 const game = { ID: 1234, Title: 'Metroid Fusion', ConsoleID: 5, NumAchievements: 34, Hashes: [] };
@@ -164,4 +166,16 @@ test('row con archiveNotSupported muestra el mensaje en es y en', () => {
   const row = { ...base, status: 'unsupported' as const, md5: null, consoleId: null, consoleName: null, message: 'archiveNotSupported' as const };
   expect(renderRow(row, makeTranslator('es')).textContent).toContain('Descomprime el archivo y suelta la ROM');
   expect(renderRow(row, makeTranslator('en')).textContent).toContain('Extract the archive and drop the ROM');
+});
+
+test('needsTool nombra la herramienta y ofrece abrir la sección', () => {
+  const el = renderRow({ ...base, status: 'unsupported', md5: null, consoleId: null, consoleName: null, message: 'needsTool', tool: 'Dolphin' }, makeTranslator('es'));
+  expect(el.textContent).toContain('conecta Dolphin en Ajustes');
+  expect(el.querySelector('[data-action="open-tools"]')).not.toBeNull();
+});
+
+test('noDiskSpace muestra los GB necesarios', () => {
+  const el = renderRow({ ...base, status: 'error', md5: null, consoleId: null, consoleName: null, message: 'noDiskSpace', tool: 'Dolphin', detail: '4.8' }, makeTranslator('es'));
+  expect(el.textContent).toContain('4.8 GB');
+  expect(el.querySelector('[data-action="open-tools"]')).toBeNull();
 });
