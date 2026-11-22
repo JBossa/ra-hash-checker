@@ -21,6 +21,12 @@
           </svg>
           <span id="formats-btn-text"></span>
         </button>
+        <button id="tools-btn" class="btn btn-ghost btn-sm" type="button">
+          <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
+            <path d="M14.7 6.3a4 4 0 0 0-5.4 5.1L4 16.7V20h3.3l5.3-5.3a4 4 0 0 0 5.1-5.4l-2.4 2.4-2.4-.6-.6-2.4z" />
+          </svg>
+          <span id="tools-btn-text"></span>
+        </button>
         <button id="settings-btn" class="icon-btn" type="button">
           <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
             <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z" />
@@ -71,6 +77,20 @@
       </div>
     </div>
 
+    <dialog id="tools" class="settings tools">
+      <div class="settings-head">
+        <h2 id="tools-title"></h2>
+        <button id="close-tools" class="icon-btn" type="button">
+          <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
+        </button>
+      </div>
+      <div class="tools-body">
+        <p id="tools-help" class="hint"></p>
+        <div id="tools-list" class="tools-list"></div>
+      </div>
+      <p id="tools-msg" class="settings-msg" role="status"></p>
+    </dialog>
+
     <dialog id="formats" class="settings formats">
       <div class="settings-head">
         <h2 id="formats-title"></h2>
@@ -120,12 +140,6 @@
             <button id="refresh" class="btn btn-ghost" type="button"></button>
             <span id="last-refresh" class="hint"></span>
           </div>
-        </section>
-
-        <section id="tools-section" class="settings-section">
-          <h3 id="tools-title"></h3>
-          <p id="tools-help" class="hint"></p>
-          <div id="tools-list" class="tools-list"></div>
         </section>
 
         <section class="settings-section">

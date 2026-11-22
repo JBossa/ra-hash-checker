@@ -170,7 +170,7 @@ test('row con archiveNotSupported muestra el mensaje en es y en', () => {
 
 test('needsTool nombra la herramienta y ofrece abrir la sección', () => {
   const el = renderRow({ ...base, status: 'unsupported', md5: null, consoleId: null, consoleName: null, message: 'needsTool', tool: 'Dolphin' }, makeTranslator('es'));
-  expect(el.textContent).toContain('conecta Dolphin en Ajustes');
+  expect(el.textContent).toContain('conecta Dolphin en Herramientas externas');
   expect(el.querySelector('[data-action="open-tools"]')).not.toBeNull();
 });
 

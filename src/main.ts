@@ -71,6 +71,9 @@ function applyStaticText() {
   $('source-link').textContent = t('ui.sourceCode');
   $('tools-title').textContent = t('ui.toolsSection');
   $('tools-help').textContent = t('ui.toolsHelp');
+  $('tools-btn-text').textContent = t('ui.toolsButton');
+  $('close-tools').title = t('ui.close');
+  $('close-tools').setAttribute('aria-label', t('ui.close'));
   $('formats-btn-text').textContent = t('ui.formats');
   $('formats-link').textContent = t('ui.formatsLink');
   $('formats-title').textContent = t('ui.formats');
@@ -238,7 +241,7 @@ async function pickFiles() {
 results.addEventListener('click', async (ev) => {
   const target = ev.target as HTMLElement;
   if (target.closest('[data-action="open-tools"]')) {
-    void openSettings('tools');
+    void openTools();
     return;
   }
   const link = target.closest<HTMLElement>('[data-url]');
@@ -361,19 +364,37 @@ function setKeyVisible(visible: boolean) {
   $('toggle-key').textContent = t(visible ? 'ui.hide' : 'ui.show');
 }
 
-async function openSettings(section?: 'tools') {
+async function openSettings() {
   keyInput.value = '';
   setKeyVisible(false);
   say('');
-  await Promise.all([loadSettings(), loadTools()]);
+  await loadSettings();
   dialog.showModal();
-  if (section === 'tools') $('tools-section').scrollIntoView({ block: 'start' });
-  else keyInput.focus();
+  keyInput.focus();
 }
 
 // --- Herramientas externas -------------------------------------------------------------------
 
 let tools: ToolView[] = [];
+const toolsDialog = $<HTMLDialogElement>('tools');
+const toolsMsg = $('tools-msg');
+
+function toolSay(text: string, kind: 'ok' | 'error' | '' = '') {
+  toolsMsg.textContent = text;
+  toolsMsg.dataset.kind = kind;
+}
+
+async function openTools() {
+  toolSay('');
+  await loadTools();
+  if (!toolsDialog.open) toolsDialog.showModal();
+}
+
+$('tools-btn').addEventListener('click', () => void openTools());
+$('close-tools').addEventListener('click', () => toolsDialog.close());
+toolsDialog.addEventListener('click', (ev) => {
+  if (ev.target === toolsDialog) toolsDialog.close();
+});
 
 function renderTools() {
   $('tools-list').replaceChildren(...tools.map((tool) => renderToolCard(tool, t)));
@@ -393,10 +414,10 @@ function updateTool(view: ToolView) {
 async function toolAction(run: () => Promise<ToolView>, done: string) {
   try {
     updateTool(await run());
-    say(t(done), 'ok');
+    toolSay(t(done), 'ok');
   } catch (e) {
     renderTools();
-    say(msg(e), 'error');
+    toolSay(msg(e), 'error');
   }
 }
 
