@@ -58,7 +58,8 @@ GBA, GB/GBC, NES, SNES, Genesis, N64 and PS1 (cue/bin) have automated tests with
 
 ### Not supported (yet)
 
-- CHD images, `.7z` / `.rar` archives (extract them first) and encrypted 3DS games.
+- CHD images (extract them to `.cue`/`.bin` with `chdman extractcd`), `.7z` / `.rar` archives (extract them first) and encrypted 3DS games.
+- Compressed disc images such as `.rvz`, `.wbfs`, `.gcz`, `.wia` or `.cso`: convert them to `.iso` first (for GameCube and Wii, Dolphin can do it: right-click the game › Convert File). The app's **Supported formats** button lists every console and extension.
 - Renaming, organizing, patching or converting ROMs.
 - Scanning a whole library folder.
 
@@ -132,7 +133,8 @@ GBA, GB/GBC, NES, SNES, Genesis, N64 y PS1 (cue/bin) tienen pruebas automáticas
 
 ### Aún no soportado
 
-- Imágenes CHD, archivos `.7z` / `.rar` (descomprímelos primero) y juegos de 3DS cifrados.
+- Imágenes CHD (extráelas a `.cue`/`.bin` con `chdman extractcd`), archivos `.7z` / `.rar` (descomprímelos primero) y juegos de 3DS cifrados.
+- Imágenes de disco comprimidas como `.rvz`, `.wbfs`, `.gcz`, `.wia` o `.cso`: conviértelas antes a `.iso` (para GameCube y Wii, Dolphin lo hace: clic derecho en el juego › Convertir archivo). El botón **Formatos compatibles** de la app muestra todas las consolas y extensiones.
 - Renombrar, organizar, parchear o convertir ROMs.
 - Revisar una carpeta completa de juegos.
 

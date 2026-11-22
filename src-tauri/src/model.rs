@@ -71,6 +71,8 @@ pub enum MessageCode {
     Offline,
     NoApiKey,
     ArchiveNotSupported,
+    CompressedDisc,
+    ChdNotSupported,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

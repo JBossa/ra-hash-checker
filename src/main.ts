@@ -8,6 +8,7 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { makeTranslator } from './i18n';
 import { fillGameInfo, renderRow, statusGroup, type CheckResult, type GameInfo, type StatusGroup } from './view';
 import { wireSettingsForm } from './settings';
+import { renderFormats, type ConsoleFormats } from './formats';
 
 const t = makeTranslator(navigator.language || 'en');
 const KEYS_URL = 'https://retroachievements.org/controlpanel.php';
@@ -61,6 +62,22 @@ function applyStaticText() {
   $('about-section').textContent = t('ui.aboutSection');
   $('about-text').textContent = t('ui.about');
   $('source-link').textContent = t('ui.sourceCode');
+  $('formats-btn-text').textContent = t('ui.formats');
+  $('formats-link').textContent = t('ui.formatsLink');
+  $('formats-title').textContent = t('ui.formats');
+  $('close-formats').title = t('ui.close');
+  $('close-formats').setAttribute('aria-label', t('ui.close'));
+  const q = $<HTMLInputElement>('formats-q');
+  q.placeholder = t('ui.formatsSearch');
+  q.setAttribute('aria-label', t('ui.formatsSearch'));
+  const notes = ['ui.noteZip', 'ui.noteCompressed', 'ui.noteChd', 'ui.noteBin', 'ui.noteM3u', 'ui.noteArchives'];
+  $('formats-notes').replaceChildren(
+    ...notes.map((k) => {
+      const li = document.createElement('li');
+      li.textContent = t(k);
+      return li;
+    }),
+  );
 }
 
 async function loadSettings(): Promise<SettingsView> {
@@ -263,6 +280,35 @@ void getCurrentWebview().onDragDropEvent((ev) => {
 });
 
 void listen<CheckResult>('result', (ev) => showCard(ev.payload));
+
+// --- Formatos compatibles ------------------------------------------------------------------
+
+const formatsDialog = $<HTMLDialogElement>('formats');
+const formatsQuery = $<HTMLInputElement>('formats-q');
+let formats: ConsoleFormats[] | null = null;
+
+function showFormats() {
+  if (!formats) return;
+  $('formats-list').replaceChildren(...renderFormats(formats, formatsQuery.value, t));
+}
+
+async function openFormats(ev?: Event) {
+  ev?.stopPropagation(); // el enlace está dentro de la zona de soltar
+  formats ??= await invoke<ConsoleFormats[]>('supported_formats').catch(() => []);
+  formatsQuery.value = '';
+  showFormats();
+  formatsDialog.showModal();
+  formatsQuery.focus();
+}
+
+$('formats-btn').addEventListener('click', () => void openFormats());
+$('formats-link').addEventListener('click', (ev) => void openFormats(ev));
+$('formats-link').addEventListener('keydown', (ev) => ev.stopPropagation());
+formatsQuery.addEventListener('input', showFormats);
+$('close-formats').addEventListener('click', () => formatsDialog.close());
+formatsDialog.addEventListener('click', (ev) => {
+  if (ev.target === formatsDialog) formatsDialog.close();
+});
 
 // --- Ajustes ---------------------------------------------------------------------------------
 

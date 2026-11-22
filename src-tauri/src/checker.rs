@@ -55,6 +55,10 @@ fn name_path(input: &Input) -> PathBuf {
 /// (hash del nombre), lo que daría un "No registrado" falso para una ROM comprimida.
 const UNSUPPORTED_ARCHIVES: [&str; 2] = ["7z", "rar"];
 
+/// Imágenes de disco comprimidas que rcheevos no lee (solo `.iso`, `.cue`...): GameCube y
+/// Wii (Dolphin), PSP y PS2 (`.cso`/`.zso`).
+const COMPRESSED_DISCS: [&str; 7] = ["rvz", "wbfs", "gcz", "wia", "ciso", "cso", "zso"];
+
 /// Fila previa común de `check` y `check_as`: disco dentro de zip o archivo comprimido.
 fn early_result(input: &Input, path: &Path) -> Option<CheckResult> {
     if input.disc_in_zip {
@@ -64,11 +68,17 @@ fn early_result(input: &Input, path: &Path) -> Option<CheckResult> {
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
-    UNSUPPORTED_ARCHIVES.contains(&ext.as_str()).then(|| CheckResult {
-        status: Status::Unsupported,
-        message: Some(MessageCode::ArchiveNotSupported),
-        ..base_result(input)
-    })
+    let message = if UNSUPPORTED_ARCHIVES.contains(&ext.as_str()) {
+        MessageCode::ArchiveNotSupported
+    } else if COMPRESSED_DISCS.contains(&ext.as_str()) {
+        MessageCode::CompressedDisc
+    } else if ext == "chd" {
+        // rcheevos lista `.chd`, pero esta compilación no incluye lector de CHD: el hash fallaría.
+        MessageCode::ChdNotSupported
+    } else {
+        return None;
+    };
+    Some(CheckResult { status: Status::Unsupported, message: Some(message), ..base_result(input) })
 }
 
 fn matched_result(
@@ -473,6 +483,25 @@ mod tests {
         assert_eq!(r.md5.as_deref(), Some(h.as_str()));
         assert_eq!(r.file_name, "sf2.zip");
         assert_eq!(check_as(&inputs[0], 27, &s).status, Status::Registered);
+    }
+
+    #[test]
+    fn compressed_discs_ask_to_convert() {
+        let s = FakeSource::default();
+        for name in ["Super Mario Galaxy.rvz", "Galaxy.WBFS", "game.cso"] {
+            let r = check(&input(name, b"x"), &s);
+            assert_eq!(r.status, Status::Unsupported, "{name}");
+            assert_eq!(r.message, Some(MessageCode::CompressedDisc), "{name}");
+            assert_eq!(check_as(&input(name, b"x"), 19, &s).message, Some(MessageCode::CompressedDisc));
+        }
+    }
+
+    #[test]
+    fn chd_asks_to_extract() {
+        let s = FakeSource::default();
+        let r = check(&input("Game (USA).CHD", b"x"), &s);
+        assert_eq!(r.status, Status::Unsupported);
+        assert_eq!(r.message, Some(MessageCode::ChdNotSupported));
     }
 
     #[test]

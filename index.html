@@ -14,12 +14,20 @@
         <img class="logo" src="/src/logo.svg" alt="" width="32" height="32" />
         <span class="wordmark">RA Hash Checker</span>
       </div>
-      <button id="settings-btn" class="icon-btn" type="button">
-        <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
-          <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z" />
-          <path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4.9a7.7 7.7 0 0 0-2.6-1.5L14 2.4h-4l-.4 2.5A7.7 7.7 0 0 0 7 6.4l-2.4-.9-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-.9a7.7 7.7 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.7 7.7 0 0 0 2.6-1.5l2.4.9 2-3.4z" />
-        </svg>
-      </button>
+      <div class="top-actions">
+        <button id="formats-btn" class="btn btn-ghost btn-sm" type="button">
+          <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
+            <path d="M6 3h9l3 3v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zM9 8h6v6H9zM9 18v3M12 18v3M15 18v3" />
+          </svg>
+          <span id="formats-btn-text"></span>
+        </button>
+        <button id="settings-btn" class="icon-btn" type="button">
+          <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
+            <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z" />
+            <path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4.9a7.7 7.7 0 0 0-2.6-1.5L14 2.4h-4l-.4 2.5A7.7 7.7 0 0 0 7 6.4l-2.4-.9-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-.9a7.7 7.7 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.7 7.7 0 0 0 2.6-1.5l2.4.9 2-3.4z" />
+          </svg>
+        </button>
+      </div>
     </header>
 
     <div id="no-key" class="notice" hidden>
@@ -36,6 +44,7 @@
           <p id="drop-title" class="drop-title"></p>
           <p id="drop-sub" class="drop-sub"></p>
           <p id="drop-compact" class="drop-compact"></p>
+          <button id="formats-link" class="link link-btn" type="button"></button>
         </div>
       </div>
 
@@ -61,6 +70,22 @@
         <p id="overlay-text"></p>
       </div>
     </div>
+
+    <dialog id="formats" class="settings formats">
+      <div class="settings-head">
+        <h2 id="formats-title"></h2>
+        <button id="close-formats" class="icon-btn" type="button">
+          <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
+        </button>
+      </div>
+      <div class="formats-search">
+        <input id="formats-q" type="search" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="formats-body">
+        <ul id="formats-notes" class="formats-notes"></ul>
+        <ul id="formats-list" class="formats-list"></ul>
+      </div>
+    </dialog>
 
     <dialog id="settings" class="settings">
       <form method="dialog">
