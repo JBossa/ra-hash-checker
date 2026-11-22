@@ -1,103 +1,161 @@
-# RA Hash Checker
+# RA Hash Checker: RetroAchievements ROM hash checker
 
-[Español](#español) · [English](#english)
+[![CI](https://github.com/JBossa/ra-hash-checker/actions/workflows/ci.yml/badge.svg)](https://github.com/JBossa/ra-hash-checker/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB)
+![Rust](https://img.shields.io/badge/Rust-stable-orange)
+
+**Drag and drop a ROM or disc image to see whether your copy matches a hash registered on [RetroAchievements](https://retroachievements.org).** RA Hash Checker is a small, open-source desktop app. It computes the official RetroAchievements hash of your game file for GBA, PS1, SNES, NES, N64, Genesis/Mega Drive, Game Boy and many more systems, and checks it against the list of hashes RetroAchievements supports for that game.
+
+[English](#english) · [Español](#español)
+
+---
+
+## English
+
+### Why
+
+RetroAchievements only unlocks achievements when your ROM or disc image is one of the versions it supports. Finding out which version you have usually means a command-line tool or reading hash tables by hand. RA Hash Checker replaces that with one window: drop the file and read the answer.
+
+### Features
+
+- **Drag and drop** one or more files, or click to choose them.
+- **Official hashing**: hashes are computed with [rcheevos](https://github.com/RetroAchievements/rcheevos), the same library RetroAchievements and its emulators use, so the result matches theirs.
+- **Clear result per file**: detected console, hash (one click to copy), and status:
+  - ✅ registered on RetroAchievements, with a link to the game page
+  - 🟡 registered, but no achievements yet
+  - ❌ not registered
+  - ⚪ not compared (no API key or cached list yet)
+- **Many systems**: Game Boy / Color / Advance, NES / Famicom Disk System, SNES, N64, Nintendo DS, Genesis / Mega Drive, Master System, Game Gear, 32X, Sega CD, Saturn, Dreamcast, PlayStation, PS2, PSP, PC Engine, Atari 2600, arcade, and every other system rcheevos supports.
+- **Shared hash methods**: some consoles hash the same way (Sega CD and Saturn, or `.bin` cartridges for Mega Drive, 32X, Atari 2600…). The app searches each console's list and picks the one that matches. A console selector lets you override the result.
+- **`.zip` support** for cartridge ROMs (one row per ROM) and for arcade sets, which RetroAchievements identifies by the zip's name.
+- **Works offline** after the first download. Each console's hash list is cached and refreshed every 7 days, and Settings has a manual refresh button.
+- **Private by design**: your game files never leave your computer. The app only sends read requests to the RetroAchievements Web API.
+- **English and Spanish** interface, chosen from your system language.
+
+### Getting started
+
+1. Build the app from source (see below). There is no prebuilt installer yet.
+2. Get your free **Web API key**: log in to [retroachievements.org](https://retroachievements.org), open the [control panel](https://retroachievements.org/controlpanel.php) and copy the key from **Keys**.
+3. Open the app, click ⚙ **Settings**, paste the key and press Enter. The key is stored in your operating system's keyring, never in a plain file.
+4. Drop your games into the window.
+
+Without a key the app still computes the hash, but it can't tell you whether that hash is registered.
+
+### Tested systems
+
+GBA, GB/GBC, NES, SNES, Genesis, N64 and PS1 (cue/bin) have automated tests with synthetic files, and the PS1 hash was also verified with a real disc image. The other systems rcheevos supports are expected to work, but they have no dedicated tests.
+
+### Not supported (yet)
+
+- CHD images, `.7z` / `.rar` archives (extract them first) and encrypted 3DS games.
+- Renaming, organizing, patching or converting ROMs.
+- Scanning a whole library folder.
+
+### Build from source
+
+Requirements: stable Rust (MSVC toolchain on Windows, with Visual Studio C++ Build Tools) and Node.js 24.
+
+```bash
+git clone --recursive https://github.com/JBossa/ra-hash-checker
+cd ra-hash-checker
+# if you cloned without --recursive:
+git submodule update --init
+npm ci
+npm run tauri dev     # run in development mode
+npm run tauri build   # build the Windows installer (.msi / .exe)
+```
+
+Run the tests with `cargo test --workspace` and `npm test`.
+
+Windows is the main target. macOS and Linux should build, but they haven't been tested.
+
+### Tech stack
+
+Rust · [Tauri 2](https://tauri.app) · TypeScript · Vite · [rcheevos](https://github.com/RetroAchievements/rcheevos) (C, compiled through a small Rust wrapper) · Vitest.
+
+---
 
 ## Español
 
-Una app de escritorio sencilla para una sola cosa: sueltas el archivo de un juego en la ventana, calcula su hash de RetroAchievements (RA) y te dice si ese hash está registrado en RA y para qué juego.
+### Para qué sirve
 
-### Qué hace
+RetroAchievements solo desbloquea logros si tu ROM o imagen de disco es una de las versiones que admite. Averiguar cuál tienes suele significar usar herramientas de línea de comandos o revisar tablas de hashes a mano. RA Hash Checker lo resuelve con una sola ventana: sueltas el archivo y lees la respuesta.
 
-- Arrastra y suelta uno o varios archivos (o haz clic para elegirlos). Para cada uno muestra la consola detectada, el hash, y el resultado: registrado (con enlace a la página del juego), registrado sin logros todavía, no registrado, o sin comparar si no hay clave ni caché.
-- Los hashes los calcula la librería oficial [rcheevos](https://github.com/RetroAchievements/rcheevos) (licencia MIT), la misma que usa RA.
-- Los `.zip` se admiten para cartuchos (cada ROM dentro produce su propia fila) y para sets de arcade, que RA identifica por el nombre del zip.
-- Las listas de hashes de cada consola se descargan al necesitarlas, se guardan en caché y se renuevan solas pasados 7 días (también hay un botón manual en Ajustes). Tras la primera descarga funciona sin conexión.
-- Interfaz en español e inglés según el sistema.
+### Funciones
 
-### Clave de API
+- **Arrastra y suelta** uno o varios archivos, o haz clic para elegirlos.
+- **Hash oficial**: se calcula con [rcheevos](https://github.com/RetroAchievements/rcheevos), la misma librería que usan RetroAchievements y sus emuladores, así que el resultado coincide con el de ellos.
+- **Resultado claro por archivo**: consola detectada, hash (se copia con un clic) y estado:
+  - ✅ registrado en RetroAchievements, con enlace a la página del juego
+  - 🟡 registrado, pero sin logros todavía
+  - ❌ no registrado
+  - ⚪ sin comparar (todavía no hay clave de API ni lista en caché)
+- **Muchas consolas**: Game Boy / Color / Advance, NES / Famicom Disk System, SNES, N64, Nintendo DS, Genesis / Mega Drive, Master System, Game Gear, 32X, Sega CD, Saturn, Dreamcast, PlayStation, PS2, PSP, PC Engine, Atari 2600, arcade y todas las demás que soporta rcheevos.
+- **Consolas con el mismo método de hash**: algunas calculan el hash igual (Sega CD y Saturn, o los cartuchos `.bin` de Mega Drive, 32X, Atari 2600…). La app busca en la lista de cada una y se queda con la que coincide. Con el selector de consola puedes cambiar el resultado.
+- **Archivos `.zip`** de cartuchos (una fila por cada ROM) y sets de arcade, que RetroAchievements identifica por el nombre del zip.
+- **Funciona sin conexión** tras la primera descarga. La lista de hashes de cada consola se guarda en caché y se renueva cada 7 días, y en Ajustes hay un botón para actualizarla a mano.
+- **Privada**: tus archivos nunca salen de tu equipo. La app solo hace peticiones de lectura a la API web de RetroAchievements.
+- Interfaz en **español e inglés**, según el idioma de tu sistema.
 
-La app usa únicamente **tu propia** clave de la API web de RA y la API web pública; no incluye ni comparte ninguna clave común. Para obtenerla: [retroachievements.org](https://retroachievements.org) → panel de control → Keys (<https://retroachievements.org/controlpanel.php>). Pégala en Ajustes. Se guarda en el llavero del sistema, no en texto plano. Sin clave igualmente se calcula el hash, pero el resultado dice "sin comparar". Los archivos de tus juegos nunca se suben: solo se hacen peticiones de lectura a RA.
+### Primeros pasos
 
-### Consolas con pruebas automáticas
+1. Compila la app desde el código fuente (ver abajo). Todavía no hay instalador precompilado.
+2. Consigue tu **clave de API web**, que es gratuita: entra en [retroachievements.org](https://retroachievements.org), abre el [panel de control](https://retroachievements.org/controlpanel.php) y copia la clave de **Keys**.
+3. Abre la app, pulsa ⚙ **Ajustes**, pega la clave y pulsa Enter. La clave se guarda en el llavero del sistema operativo, nunca en un archivo de texto.
+4. Suelta tus juegos en la ventana.
 
-GBA, GB/GBC, NES, SNES, Genesis, N64 y PS1 (cue/bin) tienen pruebas automáticas con archivos sintéticos; el hash de PS1 se verificó además con una imagen de disco real. rcheevos soporta más consolas; esas no tienen pruebas explícitas.
+Sin clave, la app igual calcula el hash, pero no puede decirte si está registrado.
 
-Cuando varias consolas comparten el mismo método de hash (por ejemplo Sega CD y Saturn, o los `.bin` de Mega Drive, 32X, Atari 2600 y otras), la app busca el hash en la lista de cada una, en orden, y muestra la primera que coincide.
+### Consolas con pruebas
 
-### No-objetivos (v1)
+GBA, GB/GBC, NES, SNES, Genesis, N64 y PS1 (cue/bin) tienen pruebas automáticas con archivos sintéticos, y el hash de PS1 se verificó además con una imagen de disco real. Las demás consolas que soporta rcheevos deberían funcionar, pero no tienen pruebas propias.
 
+### Aún no soportado
+
+- Imágenes CHD, archivos `.7z` / `.rar` (descomprímelos primero) y juegos de 3DS cifrados.
 - Renombrar, organizar, parchear o convertir ROMs.
-- Archivos CHD, archivos 7z y juegos de 3DS cifrados.
-- Cuentas, logros o progreso del usuario.
-- Revisar una biblioteca completa por carpetas.
-- Idea futura: sugerencia "¿Quizás…?" cuando el hash no coincide.
+- Revisar una carpeta completa de juegos.
 
 ### Compilar desde el código fuente
 
-Requisitos: Rust estable (en Windows, toolchain MSVC) y Node 24.
+Requisitos: Rust estable (en Windows, toolchain MSVC con las Build Tools de C++ de Visual Studio) y Node.js 24.
 
-```
-git clone --recursive https://github.com/<owner>/ra-hash-checker
+```bash
+git clone --recursive https://github.com/JBossa/ra-hash-checker
 cd ra-hash-checker
 # si clonaste sin --recursive:
 git submodule update --init
 npm ci
 npm run tauri dev     # modo desarrollo
-npm run tauri build   # genera el instalador
+npm run tauri build   # genera el instalador de Windows (.msi / .exe)
 ```
 
-Windows primero; Mac y Linux deben poder compilarse, pero no se han probado.
+Las pruebas se ejecutan con `cargo test --workspace` y `npm test`.
 
-### Licencia
+Windows es la plataforma principal. Mac y Linux deberían compilar, pero no se han probado.
 
-MIT, ver [LICENSE](LICENSE). Incluye rcheevos (MIT) como submódulo git.
+---
 
-## English
+## Credits and acknowledgements / Créditos y agradecimientos
 
-A simple desktop app for one thing: drop a game file into the window, it computes its RetroAchievements (RA) hash and tells you whether that hash is registered on RA, and for which game.
+**RA Hash Checker was created by [Juan Bossa](https://github.com/JBossa).**
 
-### What it does
+This project stands on the work of the **[RetroAchievements](https://retroachievements.org)** community. Thank you for keeping retro gaming alive:
 
-- Drag and drop one or more files (or click to choose them). For each one it shows the detected console, the hash, and the result: registered (with a link to the game page), registered with no achievements yet, not registered, or not compared if there is no key or cache.
-- Hashes are computed by the official [rcheevos](https://github.com/RetroAchievements/rcheevos) library (MIT license), the same one RA uses.
-- `.zip` files are supported for cartridges (each ROM inside gets its own row) and for arcade sets, which RA identifies by the zip's name.
-- Each console's hash list is downloaded when needed, cached, and refreshed automatically after 7 days (there is also a manual button in Settings). After the first download it works offline.
-- Interface in Spanish and English, following the system language.
+- **[rcheevos](https://github.com/RetroAchievements/rcheevos)**, Copyright (c) 2018 RetroAchievements.org, MIT License. All hash calculation is done by rcheevos. Its full license is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- **[RetroAchievements Web API](https://api-docs.retroachievements.org)**. Game titles, hash lists and game pages come from RetroAchievements. Following RetroAchievements' guidelines for third-party tools, the app:
+  - uses each user's own API key, with no shared keys;
+  - caches data locally to keep requests low;
+  - identifies itself with a descriptive User-Agent;
+  - never re-hosts or redistributes RetroAchievements data.
+- The [game identification](https://docs.retroachievements.org/developer-docs/game-identification.html) documentation explains how each system is hashed.
 
-### API key
+> **Disclaimer:** RA Hash Checker is an independent, unofficial project. It is not affiliated with, endorsed by or sponsored by RetroAchievements.org. "RetroAchievements" and all game, console and company names are trademarks of their respective owners and are used here only for identification. Please follow the [RetroAchievements Terms of Use](https://retroachievements.org/terms) when using your API key.
+>
+> **Aviso:** RA Hash Checker es un proyecto independiente y no oficial. No está afiliado a RetroAchievements.org ni cuenta con su respaldo o patrocinio. "RetroAchievements" y los nombres de juegos, consolas y empresas son marcas de sus respectivos dueños y aquí solo se usan para identificarlos.
 
-The app only uses **your own** RA web API key and the public web API; it ships no shared key. To get one: [retroachievements.org](https://retroachievements.org) → control panel → Keys (<https://retroachievements.org/controlpanel.php>). Paste it in Settings. It is stored in the OS keyring, not in plain text. Without a key the hash is still computed, but the result reads "not compared". Your game files are never uploaded: only read requests are sent to RA.
+## License / Licencia
 
-### Consoles with automated tests
-
-GBA, GB/GBC, NES, SNES, Genesis, N64 and PS1 (cue/bin) are covered by automated tests with synthetic files; the PS1 hash was also verified with a real disc image. rcheevos supports more consoles; those have no explicit tests.
-
-When several consoles share a hash method (for example Sega CD and Saturn, or `.bin` files for Mega Drive, 32X, Atari 2600 and others), the app looks the hash up in each console's list, in order, and shows the first one that matches.
-
-### Non-goals (v1)
-
-- Renaming, organizing, patching or converting ROMs.
-- CHD files, 7z archives and encrypted 3DS games.
-- User accounts, achievements or progress.
-- Scanning a whole library by folder.
-- Future idea: a "Maybe...?" suggestion when the hash does not match.
-
-### Building from source
-
-Requirements: stable Rust (MSVC toolchain on Windows) and Node 24.
-
-```
-git clone --recursive https://github.com/<owner>/ra-hash-checker
-cd ra-hash-checker
-# if you cloned without --recursive:
-git submodule update --init
-npm ci
-npm run tauri dev     # development mode
-npm run tauri build   # produces the installer
-```
-
-Windows first; Mac and Linux should build but are untested.
-
-### License
-
-MIT, see [LICENSE](LICENSE). Bundles rcheevos (MIT) as a git submodule.
+[MIT](LICENSE) © 2026 Juan Bossa. Third-party components keep their own licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

@@ -2,6 +2,15 @@
   "name": "ra-hash-checker",
   "private": true,
   "version": "0.1.0",
+  "description": "Drag-and-drop desktop app that checks whether a ROM matches a RetroAchievements hash",
+  "author": "Juan Bossa",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JBossa/ra-hash-checker.git"
+  },
+  "homepage": "https://github.com/JBossa/ra-hash-checker#readme",
+  "keywords": ["retroachievements", "rom", "hash", "checker", "emulation", "retro-gaming", "tauri", "rcheevos"],
   "type": "module",
   "scripts": {
     "dev": "vite",
