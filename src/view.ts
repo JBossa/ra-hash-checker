@@ -17,7 +17,11 @@ export type MessageCode =
   | 'noApiKey'
   | 'archiveNotSupported'
   | 'compressedDisc'
-  | 'chdNotSupported';
+  | 'chdNotSupported'
+  | 'wbfsUpdatePartitionRemoved'
+  | 'needsTool'
+  | 'noDiskSpace'
+  | 'toolFailed';
 
 /** Serializado con las claves PascalCase de la API de RA. */
 export interface GameEntry {
@@ -60,6 +64,10 @@ export interface CheckResult {
   gameHashes: GameHash[];
   alternatives: [number, string][];
   message: MessageCode | null;
+  /** Herramienta externa implicada en el mensaje ("Dolphin"). */
+  tool: string | null;
+  /** Dato para el mensaje (GB necesarios de `noDiskSpace`). */
+  detail: string | null;
 }
 
 export type StatusGroup = 'ok' | 'missing' | 'other';
@@ -256,11 +264,21 @@ function compactCard(r: CheckResult, t: Translator): HTMLElement {
     body.append(line);
   }
 
-  let message: string | null = r.message ? t(`msg.${r.message}`) : null;
+  let message: string | null = r.message
+    ? fmt(t(`msg.${r.message}`), { tool: r.tool ?? '', gb: r.detail ?? '' })
+    : null;
   if (!message && r.status === 'notRegistered' && r.consoleName) {
     message = fmt(t('msg.notFound'), { console: r.consoleName });
   }
   if (message) body.append(el('p', 'message', message));
+  if (r.message === 'needsTool') {
+    const open = el('button', 'btn btn-ghost btn-sm', t('ui.openTools'));
+    open.type = 'button';
+    open.dataset.action = 'open-tools';
+    const actions = el('div', 'card-actions');
+    actions.append(open);
+    body.append(actions);
+  }
 
   card.append(body);
   return card;

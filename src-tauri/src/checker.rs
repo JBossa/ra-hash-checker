@@ -2,7 +2,7 @@
 
 use crate::inputs::Input;
 use crate::model::{CheckResult, GameEntry, GameHash, MessageCode, Status};
-use rcheevos_hash::{candidates, console_name, hash, hash_console_for};
+use rcheevos_hash::{candidates, console_name, hash_checked, hash_console_for, HashError};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -36,6 +36,8 @@ fn base_result(input: &Input) -> CheckResult {
         game_hashes: Vec::new(),
         alternatives: Vec::new(),
         message: None,
+        tool: None,
+        detail: None,
     }
 }
 
@@ -55,9 +57,10 @@ fn name_path(input: &Input) -> PathBuf {
 /// (hash del nombre), lo que daría un "No registrado" falso para una ROM comprimida.
 const UNSUPPORTED_ARCHIVES: [&str; 2] = ["7z", "rar"];
 
-/// Imágenes de disco comprimidas que rcheevos no lee (solo `.iso`, `.cue`...): GameCube y
-/// Wii (Dolphin), PSP y PS2 (`.cso`/`.zso`).
-const COMPRESSED_DISCS: [&str; 7] = ["rvz", "wbfs", "gcz", "wia", "ciso", "cso", "zso"];
+/// Imágenes de disco comprimidas que rcheevos no lee y ninguna herramienta externa convierte:
+/// `.ciso` (Wii) y `.cso`/`.zso` (PSP y PS2). `.wbfs` se lee (`rcheevos_hash`, módulo `wbfs`) y
+/// `.rvz`/`.gcz`/`.wia` se convierten con Dolphin (`crate::tools`).
+const COMPRESSED_DISCS: [&str; 3] = ["ciso", "cso", "zso"];
 
 /// Fila previa común de `check` y `check_as`: disco dentro de zip o archivo comprimido.
 fn early_result(input: &Input, path: &Path) -> Option<CheckResult> {
@@ -68,6 +71,15 @@ fn early_result(input: &Input, path: &Path) -> Option<CheckResult> {
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
+    if let Some(tool) = crate::tools::tool_for_extension(&ext) {
+        // Llega aquí solo si la herramienta no está conectada (lib.rs convierte antes si lo está).
+        return Some(CheckResult {
+            status: Status::Unsupported,
+            message: Some(MessageCode::NeedsTool),
+            tool: Some(tool.short_name.to_string()),
+            ..base_result(input)
+        });
+    }
     let message = if UNSUPPORTED_ARCHIVES.contains(&ext.as_str()) {
         MessageCode::ArchiveNotSupported
     } else if COMPRESSED_DISCS.contains(&ext.as_str()) {
@@ -127,27 +139,50 @@ fn unmatched_result(
     }
 }
 
+/// Mensaje cuando no hay hash: el de un `.wbfs` sin partición de actualización es específico.
+fn no_hash_message(e: HashError) -> MessageCode {
+    match e {
+        HashError::WbfsUpdatePartitionRemoved => MessageCode::WbfsUpdatePartitionRemoved,
+        HashError::Failed => MessageCode::NoHash,
+    }
+}
+
 pub fn check(input: &Input, src: &dyn HashListSource) -> CheckResult {
+    check_filtered(input, src, None)
+}
+
+/// Como `check`, pero solo con las consolas `consoles` y sin selector de consola: para la imagen
+/// que produce una herramienta externa (un `.iso` de Dolphin es de GameCube o de Wii).
+pub fn check_only(input: &Input, consoles: &[u32], src: &dyn HashListSource) -> CheckResult {
+    let mut r = check_filtered(input, src, Some(consoles));
+    r.alternatives.clear();
+    r
+}
+
+fn check_filtered(input: &Input, src: &dyn HashListSource, only: Option<&[u32]>) -> CheckResult {
     let path = name_path(input);
     if let Some(r) = early_result(input, &path) {
         return r;
     }
     let data = input.data.as_deref();
-    let candidates = candidates(&path, data);
+    let mut candidates = candidates(&path, data);
+    if let Some(only) = only {
+        candidates.retain(|c| only.contains(&c.console_id));
+    }
     if candidates.is_empty() {
         return CheckResult { status: Status::Unsupported, ..base_result(input) };
     }
 
     // Un hash por método: las consolas que comparten método reutilizan el MD5 (`hash_as`).
-    let mut by_method: HashMap<u32, Option<String>> = HashMap::new();
+    let mut by_method: HashMap<u32, Result<String, HashError>> = HashMap::new();
     // (consola, md5, motivo si su lista no estuvo disponible)
     let mut hashed: Vec<(u32, String, Option<MessageCode>)> = Vec::new();
     for cand in candidates {
         let c = cand.console_id;
         let md5 = by_method
             .entry(cand.hash_as)
-            .or_insert_with(|| hash(&path, data, cand.hash_as));
-        let Some(h) = md5.clone() else { continue };
+            .or_insert_with(|| hash_checked(&path, data, cand.hash_as));
+        let Ok(h) = md5.clone() else { continue };
         match src.list(c) {
             ListOutcome::Available(games) => {
                 if let Some(game) = find_game(&games, &h) {
@@ -159,7 +194,9 @@ pub fn check(input: &Input, src: &dyn HashListSource) -> CheckResult {
         }
     }
     let Some((c0, h0, unavailable)) = hashed.first().cloned() else {
-        return error_result(input, MessageCode::NoHash);
+        let wbfs = by_method.values().any(|r| *r == Err(HashError::WbfsUpdatePartitionRemoved));
+        let e = if wbfs { HashError::WbfsUpdatePartitionRemoved } else { HashError::Failed };
+        return error_result(input, no_hash_message(e));
     };
     let alternatives = hashed[1..]
         .iter()
@@ -174,8 +211,9 @@ pub fn check_as(input: &Input, console_id: u32, src: &dyn HashListSource) -> Che
         return r;
     }
     let data = input.data.as_deref();
-    let Some(h) = hash(&path, data, hash_console_for(&path, data, console_id)) else {
-        return error_result(input, MessageCode::NoHash);
+    let h = match hash_checked(&path, data, hash_console_for(&path, data, console_id)) {
+        Ok(h) => h,
+        Err(e) => return error_result(input, no_hash_message(e)),
     };
     match src.list(console_id) {
         ListOutcome::Available(games) => match find_game(&games, &h) {
@@ -488,12 +526,58 @@ mod tests {
     #[test]
     fn compressed_discs_ask_to_convert() {
         let s = FakeSource::default();
-        for name in ["Super Mario Galaxy.rvz", "Galaxy.WBFS", "game.cso"] {
+        for name in ["Galaxy.ciso", "game.cso", "game.ZSO"] {
             let r = check(&input(name, b"x"), &s);
             assert_eq!(r.status, Status::Unsupported, "{name}");
             assert_eq!(r.message, Some(MessageCode::CompressedDisc), "{name}");
             assert_eq!(check_as(&input(name, b"x"), 19, &s).message, Some(MessageCode::CompressedDisc));
         }
+    }
+
+    #[test]
+    fn wbfs_is_hashed_as_wii() {
+        // Un archivo que no es WBFS de verdad: se intenta como Wii (no se pide convertirlo) y,
+        // al no poder leerse, da "sin hash".
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("Galaxy.wbfs");
+        std::fs::write(&p, b"not really wbfs").unwrap();
+        let r = check(&file_input(&p), &FakeSource::default());
+        assert_eq!(r.status, Status::Error);
+        assert_eq!(r.message, Some(MessageCode::NoHash));
+    }
+
+    #[test]
+    fn wbfs_without_update_partition_has_its_own_message() {
+        assert_eq!(
+            no_hash_message(HashError::WbfsUpdatePartitionRemoved),
+            MessageCode::WbfsUpdatePartitionRemoved
+        );
+        assert_eq!(no_hash_message(HashError::Failed), MessageCode::NoHash);
+    }
+
+    #[test]
+    fn dolphin_formats_without_the_tool_ask_for_it() {
+        let s = FakeSource::default();
+        for name in ["Super Mario Galaxy.rvz", "Galaxy.GCZ", "game.wia"] {
+            let r = check(&input(name, b"x"), &s);
+            assert_eq!(r.status, Status::Unsupported, "{name}");
+            assert_eq!(r.message, Some(MessageCode::NeedsTool), "{name}");
+            assert_eq!(r.tool.as_deref(), Some("Dolphin"), "{name}");
+        }
+    }
+
+    #[test]
+    fn check_only_limits_consoles_and_hides_the_selector() {
+        // Un .bin de cartucho se compara con Mega Drive y familia; limitado a Atari 2600 solo
+        // pregunta por esa lista y no ofrece alternativas.
+        let (data, _) = bin_hashed();
+        let s = FakeSource::default();
+        let r = check_only(&input("x.bin", &data), &[25], &s);
+        assert_eq!(*s.asked.borrow(), vec![25]);
+        assert_eq!(r.console_id, Some(25));
+        assert!(r.alternatives.is_empty());
+        let none = check_only(&input("x.bin", &data), &[16, 19], &FakeSource::default());
+        assert_eq!(none.status, Status::Unsupported);
     }
 
     #[test]

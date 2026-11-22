@@ -3,10 +3,21 @@
 mod consoles;
 mod expansions;
 mod formats;
+mod wbfs;
 
 pub use consoles::console_name;
 pub use expansions::{candidates, hash_console_for, Candidate};
 pub use formats::formats_by_console;
+
+/// Why [`hash_checked`] has no hash.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HashError {
+    /// rcheevos could not hash the input for that console.
+    Failed,
+    /// A `.wbfs` without the disc's update partition: the RetroAchievements Wii hash covers it,
+    /// so no hash computed from this file can match.
+    WbfsUpdatePartitionRemoved,
+}
 
 use std::ffi::{c_char, c_int, c_void, CString};
 use std::marker::PhantomData;
@@ -15,10 +26,14 @@ use std::ptr;
 
 type MessageFn = Option<unsafe extern "C" fn(*const c_char, *const RcHashIterator)>;
 
-/// `rc_hash_filereader_t`: open, seek, tell, read, close.
+/// `rc_hash_filereader_t`: open, seek, tell, read, close (RC_CCONV is cdecl, i.e. "C").
 #[repr(C)]
 struct FileReader {
-    _fns: [*const c_void; 5],
+    open: Option<unsafe extern "C" fn(*const c_char) -> *mut c_void>,
+    seek: Option<unsafe extern "C" fn(*mut c_void, i64, c_int)>,
+    tell: Option<unsafe extern "C" fn(*mut c_void) -> i64>,
+    read: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, usize) -> usize>,
+    close: Option<unsafe extern "C" fn(*mut c_void)>,
 }
 
 /// `rc_hash_cdreader_t` (RC_HASH_NO_DISC is not defined): open_track, read_sector, close_track, first_track_sector, open_track_iterator.
@@ -32,7 +47,7 @@ struct CdReader {
 struct Callbacks {
     _verbose_message: MessageFn,
     _error_message: MessageFn,
-    _filereader: FileReader,
+    filereader: FileReader,
     _cdreader: CdReader,
 }
 
@@ -113,11 +128,35 @@ pub fn candidate_consoles(path: &Path, data: Option<&[u8]>) -> Vec<u32> {
 }
 
 /// Lowercase 32-char MD5 as computed by RetroAchievements for `console_id`,
-/// or `None` if rcheevos cannot hash the input.
+/// or `None` if rcheevos cannot hash the input (see [`hash_checked`] for why).
 /// If `data` is `Some`, `path` only supplies the file name.
 pub fn hash(path: &Path, data: Option<&[u8]>, console_id: u32) -> Option<String> {
-    let c_path = to_cstring(path)?;
-    let it = Iter::new(&c_path, data);
+    hash_checked(path, data, console_id).ok()
+}
+
+/// Like [`hash`], but says why there is no hash.
+pub fn hash_checked(path: &Path, data: Option<&[u8]>, console_id: u32) -> Result<String, HashError> {
+    let c_path = to_cstring(path).ok_or(HashError::Failed)?;
+    let mut it = Iter::new(&c_path, data);
+    if data.is_none() && wbfs::is_wbfs(path) {
+        // Present the .wbfs to rcheevos as the disc image it contains.
+        it.raw.callbacks.filereader = FileReader {
+            open: Some(wbfs::open),
+            seek: Some(wbfs::seek),
+            tell: Some(wbfs::tell),
+            read: Some(wbfs::read),
+            close: Some(wbfs::close),
+        };
+        let (md5, missing) = wbfs::track_missing(|| generate(&it, console_id));
+        if wbfs::update_partition_lost(path, &missing) {
+            return Err(HashError::WbfsUpdatePartitionRemoved);
+        }
+        return md5.ok_or(HashError::Failed);
+    }
+    generate(&it, console_id).ok_or(HashError::Failed)
+}
+
+fn generate(it: &Iter<'_>, console_id: u32) -> Option<String> {
     let mut out = [0 as c_char; 33];
     // SAFETY: `out` holds the 33 bytes rcheevos writes; `it` is live and initialized.
     let ok = unsafe { rc_hash_generate(out.as_mut_ptr(), console_id, &it.raw) };

@@ -80,7 +80,7 @@ mod tests {
 
     #[test]
     fn known_consoles_have_their_extensions() {
-        assert_eq!(exts(19), vec!["iso", "wad"]); // Wii: no .rvz/.wbfs
+        assert_eq!(exts(19), vec!["iso", "wad", "wbfs"]); // Wii: no .rvz
         assert_eq!(exts(16), vec!["iso"]); // GameCube
         assert!(exts(39).contains(&"cue") && exts(39).contains(&"bin")); // Saturn
         assert_eq!(exts(12), vec!["bin", "cue"]); // PlayStation (no .chd in this build)
