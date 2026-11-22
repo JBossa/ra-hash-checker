@@ -9,7 +9,10 @@
     "dialog:allow-open",
     {
       "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://retroachievements.org/*" }]
+      "allow": [
+        { "url": "https://retroachievements.org/*" },
+        { "url": "https://github.com/JBossa/ra-hash-checker*" }
+      ]
     },
     "clipboard-manager:allow-write-text"
   ]
