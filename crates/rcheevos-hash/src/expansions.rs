@@ -99,7 +99,7 @@ fn expansions(ext: &str, rep: u32, raw: &[u32]) -> &'static [(u32, u32)] {
 /// them only through its "No console mapping" fallback, which hashes as Game Boy, a whole-file
 /// MD5 (hash.c:1345-1350, 819/843); the app removed that fallback, so it maps them here.
 /// `(extension, console_id, hash_as)`.
-pub(crate) const EXTRA_EXTENSIONS: [(&str, u32, u32); 9] = [
+pub(crate) const EXTRA_EXTENSIONS: [(&str, u32, u32); 10] = [
     // RC_CONSOLE_WONDERSWAN: whole file (hash.c:840, buffer 554). `.wsc` is in the table (1294).
     ("ws", 53, 53),
     // RC_CONSOLE_NEOGEO_POCKET: whole file (hash.c:828, buffer 541). `.ngc` is in the table (1266).
@@ -119,6 +119,9 @@ pub(crate) const EXTRA_EXTENSIONS: [(&str, u32, u32); 9] = [
     ("j64", 17, 17),
     // RC_CONSOLE_GAME_AND_WATCH: no case in either dispatch; Game Boy fallback (hash.c:1349-1350).
     ("mgw", 60, GAMEBOY),
+    // RC_CONSOLE_WII: `.wbfs` is not in rcheevos' table; `hash` reads it through `wbfs.rs` as the
+    // disc image it stores, which rc_hash_wii (hash.c:978-979) then hashes as an `.iso`.
+    ("wbfs", 19, 19),
 ];
 
 fn extension_lower(path: &Path) -> String {

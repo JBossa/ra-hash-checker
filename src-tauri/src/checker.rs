@@ -56,8 +56,8 @@ fn name_path(input: &Input) -> PathBuf {
 const UNSUPPORTED_ARCHIVES: [&str; 2] = ["7z", "rar"];
 
 /// Imágenes de disco comprimidas que rcheevos no lee (solo `.iso`, `.cue`...): GameCube y
-/// Wii (Dolphin), PSP y PS2 (`.cso`/`.zso`).
-const COMPRESSED_DISCS: [&str; 7] = ["rvz", "wbfs", "gcz", "wia", "ciso", "cso", "zso"];
+/// Wii (Dolphin), PSP y PS2 (`.cso`/`.zso`). `.wbfs` sí se lee (`rcheevos_hash`, módulo `wbfs`).
+const COMPRESSED_DISCS: [&str; 6] = ["rvz", "gcz", "wia", "ciso", "cso", "zso"];
 
 /// Fila previa común de `check` y `check_as`: disco dentro de zip o archivo comprimido.
 fn early_result(input: &Input, path: &Path) -> Option<CheckResult> {
@@ -488,12 +488,24 @@ mod tests {
     #[test]
     fn compressed_discs_ask_to_convert() {
         let s = FakeSource::default();
-        for name in ["Super Mario Galaxy.rvz", "Galaxy.WBFS", "game.cso"] {
+        for name in ["Super Mario Galaxy.rvz", "Galaxy.GCZ", "game.cso"] {
             let r = check(&input(name, b"x"), &s);
             assert_eq!(r.status, Status::Unsupported, "{name}");
             assert_eq!(r.message, Some(MessageCode::CompressedDisc), "{name}");
             assert_eq!(check_as(&input(name, b"x"), 19, &s).message, Some(MessageCode::CompressedDisc));
         }
+    }
+
+    #[test]
+    fn wbfs_is_hashed_as_wii() {
+        // Un archivo que no es WBFS de verdad: se intenta como Wii (no se pide convertirlo) y,
+        // al no poder leerse, da "sin hash".
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("Galaxy.wbfs");
+        std::fs::write(&p, b"not really wbfs").unwrap();
+        let r = check(&file_input(&p), &FakeSource::default());
+        assert_eq!(r.status, Status::Error);
+        assert_eq!(r.message, Some(MessageCode::NoHash));
     }
 
     #[test]

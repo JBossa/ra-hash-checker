@@ -13,7 +13,7 @@ pub struct Input {
 }
 
 /// Extensiones que siempre son de disco.
-const DISC_EXTENSIONS: [&str; 5] = ["cue", "iso", "gdi", "chd", "m3u"];
+const DISC_EXTENSIONS: [&str; 6] = ["cue", "iso", "gdi", "chd", "m3u", "wbfs"];
 
 /// rcheevos trata un `.bin` de más de 32 MB como pista de CD y uno menor como cartucho de
 /// Mega Drive y familia (rcheevos v12.5.0, src/rhash/hash.c:1057-1075).
@@ -138,6 +138,15 @@ pub(crate) mod tests {
         let inputs = expand(&p).unwrap();
         assert_eq!(inputs.len(), 2);
         assert!(inputs.iter().all(|i| i.disc_in_zip && i.data.is_none()));
+    }
+
+    #[test]
+    fn zip_with_wbfs_flags_disc() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("wii.zip");
+        std::fs::write(&p, make_zip(&[("Galaxy.WBFS", b"x")])).unwrap();
+        let inputs = expand(&p).unwrap();
+        assert!(inputs[0].disc_in_zip && inputs[0].data.is_none());
     }
 
     #[test]

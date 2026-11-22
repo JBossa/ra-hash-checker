@@ -30,6 +30,7 @@ RetroAchievements only unlocks achievements when your ROM or disc image is one o
 - **Many systems**: Game Boy / Color / Advance, NES / Famicom Disk System, SNES, N64, Nintendo DS, Genesis / Mega Drive, Master System, Game Gear, 32X, Sega CD, Saturn, Dreamcast, PlayStation, PS2, PSP, PC Engine, Atari 2600, arcade, and every other system rcheevos supports.
 - **Shared hash methods**: some consoles hash the same way (Sega CD and Saturn, or `.bin` cartridges for Mega Drive, 32X, Atari 2600…). The app searches each console's list and picks the one that matches. A console selector lets you override the result.
 - **`.zip` support** for cartridge ROMs (one row per ROM) and for arcade sets, which RetroAchievements identifies by the zip's name.
+- **Wii `.wbfs` files** are read directly, including those split into `.wbf1`, `.wbf2`… parts, and give the same hash as the `.iso`.
 - **Works offline** after the first download. Each console's hash list is cached and refreshed every 7 days, and Settings has a manual refresh button.
 - **Private by design**: your game files never leave your computer. The app only sends read requests to the RetroAchievements Web API.
 - **English and Spanish** interface, chosen from your system language.
@@ -59,7 +60,7 @@ GBA, GB/GBC, NES, SNES, Genesis, N64 and PS1 (cue/bin) have automated tests with
 ### Not supported (yet)
 
 - CHD images (extract them to `.cue`/`.bin` with `chdman extractcd`), `.7z` / `.rar` archives (extract them first) and encrypted 3DS games.
-- Compressed disc images such as `.rvz`, `.wbfs`, `.gcz`, `.wia` or `.cso`: convert them to `.iso` first (for GameCube and Wii, Dolphin can do it: right-click the game › Convert File). The app's **Supported formats** button lists every console and extension.
+- Compressed disc images such as `.rvz`, `.gcz`, `.wia` or `.cso`: convert them to `.iso` first (for GameCube and Wii, Dolphin can do it: right-click the game › Convert File). The app's **Supported formats** button lists every console and extension.
 - Renaming, organizing, patching or converting ROMs.
 - Scanning a whole library folder.
 
@@ -105,6 +106,7 @@ RetroAchievements solo desbloquea logros si tu ROM o imagen de disco es una de l
 - **Muchas consolas**: Game Boy / Color / Advance, NES / Famicom Disk System, SNES, N64, Nintendo DS, Genesis / Mega Drive, Master System, Game Gear, 32X, Sega CD, Saturn, Dreamcast, PlayStation, PS2, PSP, PC Engine, Atari 2600, arcade y todas las demás que soporta rcheevos.
 - **Consolas con el mismo método de hash**: algunas calculan el hash igual (Sega CD y Saturn, o los cartuchos `.bin` de Mega Drive, 32X, Atari 2600…). La app busca en la lista de cada una y se queda con la que coincide. Con el selector de consola puedes cambiar el resultado.
 - **Archivos `.zip`** de cartuchos (una fila por cada ROM) y sets de arcade, que RetroAchievements identifica por el nombre del zip.
+- **Archivos `.wbfs` de Wii**: se leen directamente, también los divididos en partes `.wbf1`, `.wbf2`…, y dan el mismo hash que el `.iso`.
 - **Funciona sin conexión** tras la primera descarga. La lista de hashes de cada consola se guarda en caché y se renueva cada 7 días, y en Ajustes hay un botón para actualizarla a mano.
 - **Privada**: tus archivos nunca salen de tu equipo. La app solo hace peticiones de lectura a la API web de RetroAchievements.
 - Interfaz en **español e inglés**, según el idioma de tu sistema.
@@ -134,7 +136,7 @@ GBA, GB/GBC, NES, SNES, Genesis, N64 y PS1 (cue/bin) tienen pruebas automáticas
 ### Aún no soportado
 
 - Imágenes CHD (extráelas a `.cue`/`.bin` con `chdman extractcd`), archivos `.7z` / `.rar` (descomprímelos primero) y juegos de 3DS cifrados.
-- Imágenes de disco comprimidas como `.rvz`, `.wbfs`, `.gcz`, `.wia` o `.cso`: conviértelas antes a `.iso` (para GameCube y Wii, Dolphin lo hace: clic derecho en el juego › Convertir archivo). El botón **Formatos compatibles** de la app muestra todas las consolas y extensiones.
+- Imágenes de disco comprimidas como `.rvz`, `.gcz`, `.wia` o `.cso`: conviértelas antes a `.iso` (para GameCube y Wii, Dolphin lo hace: clic derecho en el juego › Convertir archivo). El botón **Formatos compatibles** de la app muestra todas las consolas y extensiones.
 - Renombrar, organizar, parchear o convertir ROMs.
 - Revisar una carpeta completa de juegos.
 
