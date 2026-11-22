@@ -13,6 +13,7 @@
 //! rcheevos only knows how to hash Wii discs from a plain image, so [`hash`](crate::hash)
 //! installs the C callbacks at the end of this file as the iterator's file reader.
 
+use std::cell::RefCell;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -25,6 +26,30 @@ const WII_SECTORS_PER_DISC: u64 = 143_432 * 2;
 const DISC_HEADER_COPY: u64 = 0x100;
 /// Split parts after the first one: `.wbf1` ... `.wbf9`.
 const MAX_SPLIT_PARTS: u32 = 9;
+
+thread_local! {
+    /// Blocks read as zeros because the file does not store them, while [`track_missing`] runs.
+    /// rcheevos calls the reader synchronously on the hashing thread.
+    static MISSING: RefCell<Option<Vec<usize>>> = const { RefCell::new(None) };
+}
+
+/// Runs `f` and returns its result with the blocks it read that the `.wbfs` does not store.
+pub(crate) fn track_missing<R>(f: impl FnOnce() -> R) -> (R, Vec<usize>) {
+    MISSING.with(|m| *m.borrow_mut() = Some(Vec::new()));
+    let r = f();
+    let missing = MISSING.with(|m| m.borrow_mut().take()).unwrap_or_default();
+    (r, missing)
+}
+
+fn note_missing(block: usize) {
+    MISSING.with(|m| {
+        if let Some(v) = m.borrow_mut().as_mut() {
+            if !v.contains(&block) {
+                v.push(block);
+            }
+        }
+    });
+}
 
 struct Part {
     file: File,
@@ -127,9 +152,12 @@ impl WbfsReader {
             let within = pos & (block_size - 1);
             let n = buf.len().min((block_size - within) as usize);
             let (chunk, rest) = buf.split_at_mut(n);
-            let lba = self.wlba.get((pos >> self.block_shift) as usize).copied().unwrap_or(0);
+            let block = (pos >> self.block_shift) as usize;
+            let lba = self.wlba.get(block).copied().unwrap_or(0);
             chunk.fill(0);
-            if lba != 0 {
+            if lba == 0 {
+                note_missing(block);
+            } else {
                 let at = ((lba as u64) << self.block_shift) + within;
                 if at < self.file_len() {
                     self.read_file(at, chunk);
@@ -139,6 +167,54 @@ impl WbfsReader {
             buf = rest;
         }
     }
+}
+
+fn be32(b: &[u8]) -> u64 {
+    u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as u64
+}
+
+/// `[start, end)` of every update partition (type 1) in the disc's partition table
+/// (same fields rc_hash_wii reads, hash_disc.c:1268-1300).
+fn update_partitions(r: &mut WbfsReader) -> Vec<(u64, u64)> {
+    let mut info = [0u8; 32];
+    r.read_at(0x40000, &mut info);
+    let mut out = Vec::new();
+    for group in info.chunks(8) {
+        let (count, table) = (be32(group).min(64), be32(&group[4..]) << 2);
+        for i in 0..count {
+            let mut entry = [0u8; 8];
+            r.read_at(table + i * 8, &mut entry);
+            if be32(&entry[4..]) != 1 {
+                continue;
+            }
+            let start = be32(&entry) << 2;
+            let mut data = [0u8; 8];
+            r.read_at(start + 0x2B8, &mut data);
+            out.push((start, start + (be32(&data) << 2) + (be32(&data[4..]) << 2)));
+        }
+    }
+    out
+}
+
+/// Whether the blocks the hash read as zeros (`missing`) are the update partition the tool that
+/// made the `.wbfs` dropped. rc_hash_wii hashes disc bytes from 0x20400 on (it treats the game
+/// partition's data offset as absolute), which on retail discs is the update partition: without
+/// it the MD5 cannot match. Missing blocks outside it (unused space, zeros on the disc) are fine.
+/// A table that lists no update partition means it was removed along with its data.
+pub(crate) fn update_partition_lost(path: &Path, missing: &[usize]) -> bool {
+    if missing.is_empty() {
+        return false;
+    }
+    let Some(mut r) = WbfsReader::open(path) else { return false };
+    let updates = update_partitions(&mut r);
+    if updates.is_empty() {
+        return true;
+    }
+    let size = 1u64 << r.block_shift;
+    missing.iter().any(|&b| {
+        let (start, end) = (b as u64 * size, (b as u64 + 1) * size);
+        updates.iter().any(|&(us, ue)| start < ue && us < end)
+    })
 }
 
 /// True for paths whose extension is `.wbfs` (any case).

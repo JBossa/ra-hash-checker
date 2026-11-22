@@ -33,3 +33,12 @@ a rcheevos un lector que traduzca posiciones del ISO a posiciones del `.wbfs`, e
 ## Riesgo
 Si un bloque que lee el hash estuviera vacío en el `.wbfs`, saldrían ceros y el MD5 no coincidiría. Es la zona con
 datos del juego, así que no se espera; se valida con un `.wbfs` real que coincida con un juego registrado.
+
+## Resultado con discos reales (Super Mario Galaxy USA)
+- `rc_hash_wii` usa el desplazamiento de datos de la partición de juego (0x20000) como absoluto: hashea los ~32 MB
+  desde 0x20400 del disco, que en un disco real son la **partición de actualización**.
+- Muchas herramientas WBFS la quitan (y a veces también de la tabla de particiones). Un `.wbfs` así no puede dar el
+  hash de RA: faltaban 16 de los 17 bloques leídos. La app lo detecta (`HashError::WbfsUpdatePartitionRemoved`)
+  y lo explica en vez de mostrar «No registrado».
+- `.iso` convertido del `.rvz` con DolphinTool: `4e0d0d2f2c5d3c13d758b027bbcc059f` (registrado en RA, juego 189).
+  Un `.wbfs` 1:1 generado a partir de él, entero y dividido en `.wbfs` + `.wbf1`, da el mismo hash.

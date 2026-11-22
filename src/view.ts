@@ -17,7 +17,8 @@ export type MessageCode =
   | 'noApiKey'
   | 'archiveNotSupported'
   | 'compressedDisc'
-  | 'chdNotSupported';
+  | 'chdNotSupported'
+  | 'wbfsUpdatePartitionRemoved';
 
 /** Serializado con las claves PascalCase de la API de RA. */
 export interface GameEntry {

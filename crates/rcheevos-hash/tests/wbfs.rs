@@ -1,6 +1,6 @@
 //! `.wbfs` (Wii Backup File System) se lee como el `.iso` equivalente.
 
-use rcheevos_hash::{candidates, hash, Candidate};
+use rcheevos_hash::{candidates, hash, hash_checked, Candidate, HashError};
 use std::fs;
 use std::path::PathBuf;
 
@@ -51,6 +51,11 @@ fn wii_iso() -> Vec<u8> {
 /// Empaqueta `iso` como un `.wbfs` de un solo juego (formato de libwbfs). Los bloques vacíos y
 /// los de la partición de actualización no se guardan, como hacen las herramientas WBFS.
 fn to_wbfs(iso: &[u8]) -> Vec<u8> {
+    to_wbfs_with(iso, |i| i * (1 << SHIFT) >= UPDATE_PART)
+}
+
+/// Como `to_wbfs`, omitiendo además los bloques `i` para los que `drop(i)` es cierto.
+fn to_wbfs_with(iso: &[u8], drop: impl Fn(usize) -> bool) -> Vec<u8> {
     let sec = 1usize << SHIFT;
     let hd = 512usize;
     let blocks_per_disc = (143_432 * 2) >> (SHIFT - 15);
@@ -64,7 +69,7 @@ fn to_wbfs(iso: &[u8]) -> Vec<u8> {
     let table = hd + 0x100;
     let mut next_lba = 1u16;
     for (i, block) in iso.chunks(sec).enumerate() {
-        let skip = block.iter().all(|&b| b == 0) || i * sec >= UPDATE_PART;
+        let skip = block.iter().all(|&b| b == 0) || drop(i);
         if skip {
             continue;
         }
@@ -134,4 +139,75 @@ fn wbfs_is_a_wii_candidate() {
         candidates(std::path::Path::new("Game (USA).wbfs"), None),
         vec![Candidate { console_id: WII, hash_as: WII }]
     );
+}
+
+/// Distribución como la de un disco real: partición de actualización en 0x50000 y la de juego
+/// detrás. rcheevos usa el desplazamiento de datos de la partición de juego (0x20000) como
+/// absoluto, así que hashea 0x20400.. del disco: dentro de la partición de actualización.
+/// `update_data` es el tamaño de datos de la partición de actualización.
+fn real_layout_iso(update_data: u32, list_update: bool) -> Vec<u8> {
+    let mut iso = pseudo(ISO_LEN, 11);
+    put32(&mut iso, 0x18, 0x5D1C_9EA3);
+    iso[0x61] = 0;
+    iso[0x40000..0x40030].fill(0);
+    put32(&mut iso, 0x40004, 0x40020 >> 2);
+    if list_update {
+        put32(&mut iso, 0x40000, 2);
+        put32(&mut iso, 0x40020, 0x50000 >> 2);
+        put32(&mut iso, 0x40024, 1);
+        put32(&mut iso, 0x40028, 0x30_0000 >> 2);
+        put32(&mut iso, 0x4002C, 0);
+    } else {
+        put32(&mut iso, 0x40000, 1);
+        put32(&mut iso, 0x40020, 0x30_0000 >> 2);
+        put32(&mut iso, 0x40024, 0);
+    }
+    put32(&mut iso, 0x50000 + 0x2B8, 0x20000 >> 2);
+    put32(&mut iso, 0x50000 + 0x2BC, update_data >> 2);
+    put32(&mut iso, 0x30_0000 + 0x2A4, 0x208);
+    put32(&mut iso, 0x30_0000 + 0x2A8, 0x2C0 >> 2);
+    put32(&mut iso, 0x30_0000 + 0x2B8, 0x20000 >> 2);
+    put32(&mut iso, 0x30_0000 + 0x2BC, 0x10_0000 >> 2); // 32 clústeres: 0x20400..0x120000
+    iso
+}
+
+/// Bloques de 256 KB con datos de la partición de actualización (no el 1, que tiene su cabecera).
+fn update_blocks(i: usize) -> bool {
+    (2..=9).contains(&i)
+}
+
+#[test]
+fn full_wbfs_with_real_layout_matches_iso() {
+    let d = tempfile::tempdir().unwrap();
+    let iso = real_layout_iso(0x20_0000, true);
+    let p = write(&d, "full.wbfs", &to_wbfs_with(&iso, |_| false));
+    assert_eq!(hash_checked(&p, None, WII), Ok(iso_hash(&d, &iso)));
+}
+
+#[test]
+fn wbfs_without_update_partition_is_reported() {
+    let d = tempfile::tempdir().unwrap();
+    let iso = real_layout_iso(0x20_0000, true);
+    let p = write(&d, "stripped.wbfs", &to_wbfs_with(&iso, update_blocks));
+    assert_eq!(hash_checked(&p, None, WII), Err(HashError::WbfsUpdatePartitionRemoved));
+    assert_eq!(hash(&p, None, WII), None);
+}
+
+#[test]
+fn wbfs_with_update_removed_from_table_is_reported() {
+    let d = tempfile::tempdir().unwrap();
+    let iso = real_layout_iso(0x20_0000, false);
+    let p = write(&d, "no-update.wbfs", &to_wbfs_with(&iso, update_blocks));
+    assert_eq!(hash_checked(&p, None, WII), Err(HashError::WbfsUpdatePartitionRemoved));
+}
+
+#[test]
+fn missing_zero_gap_after_small_update_partition_is_fine() {
+    // Partición de actualización pequeña (0x50000..0x80000) y ceros detrás: el .wbfs omite esos
+    // bloques, el hash los lee como ceros y coincide con el ISO.
+    let d = tempfile::tempdir().unwrap();
+    let mut iso = real_layout_iso(0x10000, true);
+    iso[0x80000..0x10_0000].fill(0);
+    let p = write(&d, "gap.wbfs", &to_wbfs_with(&iso, |_| false));
+    assert_eq!(hash_checked(&p, None, WII), Ok(iso_hash(&d, &iso)));
 }

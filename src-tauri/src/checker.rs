@@ -2,7 +2,7 @@
 
 use crate::inputs::Input;
 use crate::model::{CheckResult, GameEntry, GameHash, MessageCode, Status};
-use rcheevos_hash::{candidates, console_name, hash, hash_console_for};
+use rcheevos_hash::{candidates, console_name, hash_checked, hash_console_for, HashError};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -127,6 +127,14 @@ fn unmatched_result(
     }
 }
 
+/// Mensaje cuando no hay hash: el de un `.wbfs` sin partición de actualización es específico.
+fn no_hash_message(e: HashError) -> MessageCode {
+    match e {
+        HashError::WbfsUpdatePartitionRemoved => MessageCode::WbfsUpdatePartitionRemoved,
+        HashError::Failed => MessageCode::NoHash,
+    }
+}
+
 pub fn check(input: &Input, src: &dyn HashListSource) -> CheckResult {
     let path = name_path(input);
     if let Some(r) = early_result(input, &path) {
@@ -139,15 +147,15 @@ pub fn check(input: &Input, src: &dyn HashListSource) -> CheckResult {
     }
 
     // Un hash por método: las consolas que comparten método reutilizan el MD5 (`hash_as`).
-    let mut by_method: HashMap<u32, Option<String>> = HashMap::new();
+    let mut by_method: HashMap<u32, Result<String, HashError>> = HashMap::new();
     // (consola, md5, motivo si su lista no estuvo disponible)
     let mut hashed: Vec<(u32, String, Option<MessageCode>)> = Vec::new();
     for cand in candidates {
         let c = cand.console_id;
         let md5 = by_method
             .entry(cand.hash_as)
-            .or_insert_with(|| hash(&path, data, cand.hash_as));
-        let Some(h) = md5.clone() else { continue };
+            .or_insert_with(|| hash_checked(&path, data, cand.hash_as));
+        let Ok(h) = md5.clone() else { continue };
         match src.list(c) {
             ListOutcome::Available(games) => {
                 if let Some(game) = find_game(&games, &h) {
@@ -159,7 +167,9 @@ pub fn check(input: &Input, src: &dyn HashListSource) -> CheckResult {
         }
     }
     let Some((c0, h0, unavailable)) = hashed.first().cloned() else {
-        return error_result(input, MessageCode::NoHash);
+        let wbfs = by_method.values().any(|r| *r == Err(HashError::WbfsUpdatePartitionRemoved));
+        let e = if wbfs { HashError::WbfsUpdatePartitionRemoved } else { HashError::Failed };
+        return error_result(input, no_hash_message(e));
     };
     let alternatives = hashed[1..]
         .iter()
@@ -174,8 +184,9 @@ pub fn check_as(input: &Input, console_id: u32, src: &dyn HashListSource) -> Che
         return r;
     }
     let data = input.data.as_deref();
-    let Some(h) = hash(&path, data, hash_console_for(&path, data, console_id)) else {
-        return error_result(input, MessageCode::NoHash);
+    let h = match hash_checked(&path, data, hash_console_for(&path, data, console_id)) {
+        Ok(h) => h,
+        Err(e) => return error_result(input, no_hash_message(e)),
     };
     match src.list(console_id) {
         ListOutcome::Available(games) => match find_game(&games, &h) {
@@ -506,6 +517,15 @@ mod tests {
         let r = check(&file_input(&p), &FakeSource::default());
         assert_eq!(r.status, Status::Error);
         assert_eq!(r.message, Some(MessageCode::NoHash));
+    }
+
+    #[test]
+    fn wbfs_without_update_partition_has_its_own_message() {
+        assert_eq!(
+            no_hash_message(HashError::WbfsUpdatePartitionRemoved),
+            MessageCode::WbfsUpdatePartitionRemoved
+        );
+        assert_eq!(no_hash_message(HashError::Failed), MessageCode::NoHash);
     }
 
     #[test]

@@ -73,6 +73,7 @@ pub enum MessageCode {
     ArchiveNotSupported,
     CompressedDisc,
     ChdNotSupported,
+    WbfsUpdatePartitionRemoved,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
